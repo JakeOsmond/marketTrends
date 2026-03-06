@@ -1,0 +1,11 @@
+credentials.json
+.env
+data/cache/
+data/.pipeline.lock
+data/pipeline.log*
+__pycache__/
+*.pyc
+.venv/
+_cache/
+.DS_Store
+2026-*.txt

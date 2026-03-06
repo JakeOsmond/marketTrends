@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 list:*)",
+      "Bash(pip3 install:*)",
+      "Bash(kill 11726:*)",
+      "WebFetch(domain:www.fca.org.uk)",
+      "WebFetch(domain:www.eurocontrol.int)",
+      "WebFetch(domain:www.caa.co.uk)",
+      "WebFetch(domain:www.ons.gov.uk)",
+      "Bash(pgrep:*)",
+      "Bash(pip install:*)",
+      "Bash(open:*)",
+      "Bash(pip3 show:*)",
+      "WebFetch(domain:www.holidayextras.com)",
+      "Bash(for f in /Users/jake.osmond/marketTrends/_cache/ai/*)",
+      "Bash(do echo \"=== $f ===\")",
+      "Read(//Users/jake.osmond/marketTrends/**)",
+      "Bash(done)",
+      "Bash(rm:*)",
+      "Bash(gh auth:*)",
+      "Bash(git:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "agentvibes"
+  ]
+}
