@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Weekly cache warmer for HX Insurance Pulse dashboard.
 
-Run via cron every Monday 7am:
-    0 7 * * 1 cd /Users/jake.osmond/marketTrends && /usr/bin/python3 warm_cache.py >> _cache/warm.log 2>&1
+Run via cron every day at 6am:
+    0 6 * * * cd /Users/jake.osmond/marketTrends && /usr/bin/python3 warm_cache.py >> _cache/warm.log 2>&1
 
 This pre-generates ALL data and AI calls so the dashboard is instant for everyone.
+Cache lasts 24 hours — cron should run daily.
 """
 
 import hashlib
@@ -35,7 +36,7 @@ CACHE_DIR = Path(os.environ.get("CACHE_DIR", Path(__file__).resolve().parent / "
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 (CACHE_DIR / "ai").mkdir(exist_ok=True)
 (CACHE_DIR / "images").mkdir(exist_ok=True)
-CACHE_TTL_SECS = 604800  # 7 days
+CACHE_TTL_SECS = 86400  # 24 hours
 
 
 def _disk_cache_get(subfolder, key):
@@ -100,35 +101,13 @@ def _call_with_web_search(system, user):
             instructions=system,
             input=user,
         )
-        parts = []
-        for item in resp.output:
-            if hasattr(item, "content"):
-                for block in item.content:
-                    if hasattr(block, "text"):
-                        parts.append(block.text)
-            elif hasattr(item, "text"):
-                parts.append(item.text)
-        if parts:
-            result = "\n".join(parts)
-            if not _is_bad_response(result):
-                return result
+        result = getattr(resp, "output_text", "") or ""
+        if result and not _is_bad_response(result):
+            return result
     except Exception as e:
         log(f"  Responses API failed: {e}")
 
-    # Attempt 2: Chat completions with web_search_options
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-5",
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            max_completion_tokens=4000,
-            web_search_options={})
-        content = resp.choices[0].message.content
-        if content and not _is_bad_response(content):
-            return content
-    except Exception as e:
-        log(f"  Chat web search failed: {e}")
-
-    # Attempt 3: Plain chat
+    # Attempt 2: Plain chat (no web — fallback)
     try:
         resp = client.chat.completions.create(
             model="gpt-5",

@@ -20,6 +20,14 @@ from openai import OpenAI
 
 load_dotenv()
 
+# On Streamlit Cloud, secrets come from st.secrets instead of .env
+try:
+    for key in ["OPENAI_API_KEY", "APPS_SCRIPT_WEBHOOK_URL"]:
+        if key not in os.environ and hasattr(st, "secrets") and key in st.secrets:
+            os.environ[key] = st.secrets[key]
+except Exception:
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src import config
@@ -533,7 +541,7 @@ st.markdown("""
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
-@st.cache_data(ttl=604800, show_spinner="Loading pipeline data...")
+@st.cache_data(ttl=86400, show_spinner="Loading pipeline data...")
 def load_all_data():
     sd = SpikeDetector()
     sources = {}
@@ -615,7 +623,7 @@ def build_quarterly_summary(sources: dict) -> pd.DataFrame:
     return result
 
 
-@st.cache_data(ttl=604800, show_spinner="Loading competitor & price data...")
+@st.cache_data(ttl=86400, show_spinner="Loading competitor & price data...")
 def load_extra_trends():
     from pytrends.request import TrendReq
     results = {}
@@ -636,7 +644,7 @@ def load_extra_trends():
     return results
 
 
-@st.cache_data(ttl=604800, show_spinner="Loading Holiday Extras signals...")
+@st.cache_data(ttl=86400, show_spinner="Loading Holiday Extras signals...")
 def load_hx_trends():
     from pytrends.request import TrendReq
     results = {}
@@ -696,7 +704,7 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 (CACHE_DIR / "ai").mkdir(exist_ok=True)
 (CACHE_DIR / "images").mkdir(exist_ok=True)
 
-CACHE_TTL_SECS = 604800  # 7 days
+CACHE_TTL_SECS = 86400  # 24 hours
 
 
 def _disk_cache_get(subfolder: str, key: str) -> str | bytes | None:
@@ -747,7 +755,7 @@ RULES:
 - Say "more people are searching for travel insurance" not "insurance search interest is elevated".
 - CRITICAL: More people searching does NOT mean more customers buying from Holiday Extras. Be realistic.
   "Demand is growing" means the opportunity is bigger, NOT that HX is automatically winning. Suggest how to CAPTURE that demand.
-- TERMINOLOGY: "Dreaming" = people searching for holidays (future insurance buyers). "Buying" = people actively searching for travel insurance. Always anchor "buying" back to insurance specifically.
+- TERMINOLOGY: "Dreaming" = people Googling holidays (future insurance customers). "Shopping for insurance" = people Googling travel insurance. This is search data, NOT sales data — more searches doesn't mean more purchases.
 - Start with the headline -- the one thing they should walk away knowing.
 - Write short sentences. If your nan wouldn't understand it, rewrite it.
 - Give specific real-world reasons: name airlines, mention school holidays by date, reference actual news you found.
@@ -784,7 +792,7 @@ def _is_bad_response(text: str) -> bool:
     return any(marker in lower for marker in _BAD_RESPONSE_MARKERS)
 
 
-@st.cache_data(ttl=604800, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def _cached_ai(cache_key: str, system: str, user: str) -> str:
     """AI call with 7-day disk + memory cache. Shared across devices if CACHE_DIR is on Google Drive."""
     disk_key = f"{cache_key}|{system[:80]}|{user[:80]}"
@@ -823,39 +831,14 @@ def _call_with_web_search_uncached(system: str, user: str) -> str:
             instructions=system,
             input=user,
         )
-        parts = []
-        for item in resp.output:
-            if hasattr(item, "content"):
-                for block in item.content:
-                    if hasattr(block, "text"):
-                        parts.append(block.text)
-            elif hasattr(item, "text"):
-                parts.append(item.text)
-        if parts:
-            result = "\n".join(parts)
-            if not _is_bad_response(result):
-                level_used = "responses_api_web"
-                if "ai_levels" not in st.session_state:
-                    st.session_state["ai_levels"] = []
-                st.session_state["ai_levels"].append(level_used)
-                return result
-    except Exception:
-        pass
-
-    # Attempt 2: Chat completions with web_search_options
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-5",
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            max_completion_tokens=4000,
-            web_search_options={})
-        content = resp.choices[0].message.content
-        if content and not _is_bad_response(content):
-            level_used = "chat_web_search"
+        # Use output_text accessor — handles all response item types cleanly
+        result = getattr(resp, "output_text", "") or ""
+        if result and not _is_bad_response(result):
+            level_used = "responses_api_web"
             if "ai_levels" not in st.session_state:
                 st.session_state["ai_levels"] = []
             st.session_state["ai_levels"].append(level_used)
-            return content
+            return result
     except Exception:
         pass
 
@@ -904,7 +887,7 @@ def _call_openai_with_timeout(question: str, timeout_secs: int = 10) -> str | No
             return None
 
 
-@st.cache_data(ttl=604800, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def _generate_section_image(cache_key: str, description: str) -> str | None:
     """Generate a photorealistic image via DALL-E 3. Cached to disk for cross-device sharing."""
     import base64
@@ -1511,28 +1494,28 @@ def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_ye
         summary = (f'{buying_msg}. The gap is <strong>closing</strong> compared to last year.')
     else:
         summary = (f'{buying_msg} — about the same as this time last year.')
-    _section_with_image("Buyers vs Dreamers", f"div_{int(gap)}", div_img_desc, summary)
+    _section_with_image("Insurance Searchers vs Holiday Dreamers", f"div_{int(gap)}", div_img_desc, summary)
 
     with st.expander("View gap chart and detail"):
         st.markdown(f"""<div class="chart-explainer">
             <strong style="color:{TEAL};">Teal</strong> = insurance leads.
             <strong style="color:{BLUE};">Blue</strong> = holiday leads. 12-week average, SA.<br>
-            <strong>Holiday searches</strong> = people dreaming about trips (future insurance buyers). <strong>Insurance searches</strong> = people ready to buy travel insurance.
-            When insurance leads, buyers are in-market now. When holidays lead, insurance demand usually follows in 2-4 weeks.
+            <strong>Holiday searches</strong> = people Googling holidays (they'll need insurance soon). <strong>Insurance searches</strong> = people Googling travel insurance (closer to purchasing).
+            When insurance leads, people are actively looking for cover. When holidays lead, insurance searches usually follow in 2-4 weeks.
         </div>""", unsafe_allow_html=True)
         div_fig = make_divergence_chart(sa_weekly, use_sa=True)
         if div_fig.data:
             st.plotly_chart(div_fig, use_container_width=True, config={"displayModeBar": False})
 
-    q = (f"DATA:\n{_ctx}\n\nRight now, {'more people are searching for travel insurance (buying) than dreaming about holidays' if gap > 0 else 'more people are dreaming about holidays than searching for travel insurance (buying)'}. "
+    q = (f"DATA:\n{_ctx}\n\nRight now, {'more people are Googling travel insurance than holidays' if gap > 0 else 'more people are Googling holidays than travel insurance'}. "
          f"Last year it was {'the same' if abs(gap_last_year) < 5 else 'the opposite' if (gap > 0) != (gap_last_year > 0) else 'similar'}. "
          f"The gap has {gap_story} vs last year. "
-         f"'Dreaming' = searching for holidays (future insurance buyers). 'Buying' = actively searching for travel insurance. "
+         f"This is Google search data — 'dreaming' = searching for holidays, 'shopping for insurance' = searching for travel insurance. "
          f"Why is the gap like this? What real-world events explain it? What should Holiday Extras do to capture these people?")
     with st.spinner("AI analysing buyer vs dreamer gap..."):
         ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — Buyers vs Dreamers", ai_result, TEAL), unsafe_allow_html=True)
+        st.markdown(ai_box("AI — Insurance Searchers vs Dreamers", ai_result, TEAL), unsafe_allow_html=True)
     else:
         st.caption("AI analysis still loading — it will appear on refresh.")
 
@@ -1615,7 +1598,7 @@ def render_channels(hx_trends, extra_trends, _ctx, comp_df):
             f"Holiday Extras sells through 4 channels: Direct (parking cross-sell), PPC/SEO, "
             f"White Labels (Carnival, Fred Olsen cruises), and Aggregators (Compare the Market). "
             f"Based on the data, which channel has the biggest opportunity RIGHT NOW? "
-            f"Remember: more people searching doesn't mean they're buying from us — "
+            f"Remember: more people searching doesn't mean they're purchasing from us — "
             f"how do we capture this demand? Give one specific action per channel.")
     with st.spinner("AI analysing channel opportunities..."):
         ch_result = _call_openai_with_timeout(ch_q, timeout_secs=10)
@@ -2093,15 +2076,15 @@ def main():
     # Recommendation — inline in the headline, not a separate banner
     # CRITICAL: demand growing ≠ HX getting those customers. Actions must be about CAPTURING demand.
     if yoy > 10 and gap > 15:
-        reco_text = "Market is <strong>growing fast</strong> with active buyers. <strong>Capture share now</strong> — check PPC bids, push premium products."
+        reco_text = "Market is <strong>growing fast</strong> with lots of insurance searches. <strong>Capture share now</strong> — check PPC bids, push premium products."
     elif yoy > 10 and gap < -15:
         reco_text = "Lots of <strong>holiday dreamers</strong> — insurance demand is coming. <strong>Get in front of them</strong> — retarget, push insurance at booking."
     elif yoy < -5:
         reco_text = "Fewer searches than last year. <strong>Protect what you have</strong> — renewals, multi-trip, cross-sell to parking customers."
     elif gap > 25:
-        reco_text = "Strong <strong>buying intent</strong>. <strong>Be visible</strong> — check aggregator rankings, test higher PPC bids."
+        reco_text = "Strong <strong>insurance search activity</strong>. <strong>Be visible</strong> — check aggregator rankings, test higher PPC bids."
     elif gap < -20:
-        reco_text = "People <strong>dreaming about holidays</strong>, not buying insurance yet. <strong>Plant the seed</strong> — awareness campaigns, parking confirmation emails."
+        reco_text = "People <strong>dreaming about holidays</strong> but not searching for insurance yet. <strong>Plant the seed</strong> — awareness campaigns, parking confirmation emails."
     else:
         reco_text = "Market is <strong>steady</strong>. <strong>Focus on efficiency</strong> — optimise campaigns, improve conversion rates."
 
@@ -2130,16 +2113,16 @@ def main():
         id_ = "up" if i_yoy > 0 else "down"
         st.markdown(metric_card("Insurance Shoppers", f"{i_yoy:+.0f}%",
             f"{'↑' if i_yoy>0 else '↓'} vs last year",
-            "Actively searching for travel insurance — ready to buy cover", id_), unsafe_allow_html=True)
+            "Googling travel insurance — closest to actually purchasing", id_), unsafe_allow_html=True)
     with c4:
         gap_last_year = i_last_year - h_last_year
         gap_change = gap - gap_last_year
         gd = "up" if gap > 0 else "down"
         if gap > 0:
-            gap_sub = "More people want insurance than are browsing holidays — conversion window open"
+            gap_sub = "More insurance searches than holiday searches — people are closer to purchasing"
         else:
-            gap_sub = "More people dreaming about holidays than buying insurance — demand is building"
-        st.markdown(metric_card("Buying vs Dreaming", "Buyers lead" if gap > 0 else "Dreamers lead",
+            gap_sub = "More holiday searches than insurance searches — demand is building"
+        st.markdown(metric_card("Searching vs Dreaming", "Insurance leads" if gap > 0 else "Holidays lead",
             f"Gap {'widened' if abs(gap) > abs(gap_last_year) else 'narrowed'} vs last year",
             gap_sub, gd), unsafe_allow_html=True)
 
