@@ -123,7 +123,7 @@ def _call_with_web_search(system, user):
 
 
 def cached_ai(cache_key, system, user):
-    disk_key = f"{cache_key}|{system[:80]}|{user[:80]}"
+    disk_key = hashlib.sha256(f"{cache_key}|{system}|{user}".encode()).hexdigest()[:24]
     cached = _disk_cache_get("ai", disk_key)
     if cached and not _is_bad_response(cached):
         log(f"  CACHED (disk hit)")
@@ -136,7 +136,8 @@ def cached_ai(cache_key, system, user):
 
 
 def call_ai(question, system_prompt):
-    return cached_ai(question[:100], system_prompt, question)
+    cache_key = hashlib.sha256(question.encode()).hexdigest()[:16]
+    return cached_ai(cache_key, system_prompt, question)
 
 
 # ---------------------------------------------------------------------------

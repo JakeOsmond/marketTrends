@@ -1073,7 +1073,8 @@ def _is_bad_response(text: str) -> bool:
 @st.cache_data(ttl=86400, show_spinner=False)
 def _cached_ai(cache_key: str, system: str, user: str) -> str:
     """AI call with 7-day disk + memory cache. Shared across devices if CACHE_DIR is on Google Drive."""
-    disk_key = f"{cache_key}|{system[:80]}|{user[:80]}"
+    import hashlib as _hl
+    disk_key = _hl.sha256(f"{cache_key}|{system}|{user}".encode()).hexdigest()[:24]
     cached = _disk_cache_get("ai", disk_key)
     if cached and not _is_bad_response(cached):
         return cached
@@ -1141,12 +1142,16 @@ def _call_with_web_search_uncached(system: str, user: str) -> str:
 
 def _call_openai(question: str) -> str:
     """Main AI call — uses web search, cached 24h."""
-    return _cached_ai(question[:100], ANALYST_PROMPT, question)
+    import hashlib as _hl
+    cache_key = _hl.sha256(question.encode()).hexdigest()[:16]
+    return _cached_ai(cache_key, ANALYST_PROMPT, question)
 
 
 def _call_openai_raw(system: str, user: str) -> str:
     """AI call with custom system prompt — uses web search, cached 24h."""
-    return _cached_ai(f"{system[:50]}_{user[:50]}", system, user)
+    import hashlib as _hl
+    cache_key = _hl.sha256(f"{system}|{user}".encode()).hexdigest()[:16]
+    return _cached_ai(cache_key, system, user)
 
 
 def _call_openai_fresh(question: str) -> str:
