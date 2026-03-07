@@ -113,27 +113,120 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #1A1528; }
     .block-container { padding-top: 1.5rem; padding-bottom: 1rem; }
 
-    /* Scroll-triggered section animations — fade in AND out */
+    /* === PREMIUM SCROLL ANIMATIONS === */
+
+    /* Viewport edge gradient masks — content emerges from darkness */
+    .main .block-container::before,
+    .main .block-container::after {
+        content: '';
+        position: fixed;
+        left: 0; right: 0;
+        height: 120px;
+        pointer-events: none;
+        z-index: 10;
+    }
+    .main .block-container::before {
+        top: 0;
+        background: linear-gradient(to bottom, #0F0B18 0%, #0F0B18 20%, transparent 100%);
+    }
+    .main .block-container::after {
+        bottom: 0;
+        background: linear-gradient(to top, #0F0B18 0%, #0F0B18 20%, transparent 100%);
+    }
+
+    /* Section base — hidden state with blur */
     .dashboard-section {
         opacity: 0;
-        transform: translateY(40px) scale(0.985);
-        transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-                    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateY(50px) scale(0.97);
+        filter: blur(6px);
         padding: 2.5rem 0;
         margin: 0.5rem 0;
         border-bottom: 1px solid rgba(45, 36, 69, 0.3);
-        will-change: opacity, transform;
+        will-change: opacity, transform, filter;
+        transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                    filter 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                    border-color 0.6s ease;
     }
     .dashboard-section:last-child { border-bottom: none; }
     .dashboard-section.visible {
         opacity: 1;
         transform: translateY(0) scale(1);
+        filter: blur(0px);
+    }
+    .dashboard-section.active {
+        border-bottom-color: rgba(84, 46, 145, 0.5);
+        box-shadow: 0 1px 0 0 rgba(155, 114, 207, 0.15);
     }
     .dashboard-section.fading-out {
         opacity: 0;
-        transform: translateY(-30px) scale(0.985);
+        transform: translateY(-35px) scale(0.97);
+        filter: blur(4px);
         transition: opacity 0.5s cubic-bezier(0.4, 0, 1, 1),
-                    transform 0.5s cubic-bezier(0.4, 0, 1, 1);
+                    transform 0.5s cubic-bezier(0.4, 0, 1, 1),
+                    filter 0.5s cubic-bezier(0.4, 0, 1, 1);
+    }
+
+    /* Staggered child cascade — elements animate in sequentially */
+    .dashboard-section .section-header,
+    .dashboard-section .section-row,
+    .dashboard-section .section-image,
+    .dashboard-section .section-summary,
+    .dashboard-section .section-content,
+    .dashboard-section .ai-insight,
+    .dashboard-section .ai-loading {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .dashboard-section.visible .section-header {
+        opacity: 1; transform: translateY(0); transition-delay: 0.05s;
+    }
+    .dashboard-section.visible .section-image {
+        opacity: 1; transform: translateY(0); transition-delay: 0.12s;
+    }
+    .dashboard-section.visible .section-row {
+        opacity: 1; transform: translateY(0); transition-delay: 0.1s;
+    }
+    .dashboard-section.visible .section-summary,
+    .dashboard-section.visible .section-content {
+        opacity: 1; transform: translateY(0); transition-delay: 0.18s;
+    }
+    .dashboard-section.visible .ai-insight,
+    .dashboard-section.visible .ai-loading {
+        opacity: 1; transform: translateY(0); transition-delay: 0.28s;
+    }
+    .dashboard-section [data-testid="stExpander"],
+    .dashboard-section .stPlotlyChart {
+        opacity: 0; transform: translateY(15px);
+        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.32s,
+                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.32s;
+    }
+    .dashboard-section.visible [data-testid="stExpander"],
+    .dashboard-section.visible .stPlotlyChart {
+        opacity: 1; transform: translateY(0);
+    }
+
+    /* Progress dot nav — fixed right side */
+    .scroll-progress-nav {
+        position: fixed; right: 18px; top: 50%; transform: translateY(-50%);
+        z-index: 100; display: flex; flex-direction: column; gap: 10px;
+        padding: 8px 4px; opacity: 0; transition: opacity 0.4s ease;
+    }
+    .scroll-progress-nav.show { opacity: 1; }
+    .scroll-progress-nav .dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: rgba(155, 114, 207, 0.25);
+        transition: background 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+        cursor: pointer;
+    }
+    .scroll-progress-nav .dot.active {
+        background: #9B72CF; transform: scale(1.6);
+        box-shadow: 0 0 8px rgba(155, 114, 207, 0.5);
+    }
+    .scroll-progress-nav .dot:hover {
+        background: rgba(155, 114, 207, 0.6); transform: scale(1.4);
     }
 
     /* Hero top area — generous breathing room */
@@ -327,9 +420,9 @@ st.markdown("""
     .section-image img {
         width: 100%; height: 100%; object-fit: cover; display: block;
         opacity: 0.55; filter: saturate(0.7);
-        transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: opacity 0.3s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         will-change: transform;
-        transform: translateY(0px);
+        transform: translateY(0px) scale(1.05);
     }
     .section-image:hover img { opacity: 0.75; }
     .section-content { flex: 1; min-width: 0; }
@@ -561,25 +654,55 @@ st.markdown("""
         .loading-steps, .loading-bar-wrap { width: 260px; }
         .section-row { flex-direction: column; }
         .section-image { width: 100%; aspect-ratio: 3 / 1; }
-        .dashboard-section { padding: 1.5rem 0; transform: none !important; }
-        .dashboard-section.visible { transform: none !important; }
-        .dashboard-section.fading-out { transform: none !important; }
+        .dashboard-section { padding: 1.5rem 0; transform: none !important; filter: none !important; }
+        .dashboard-section.visible { transform: none !important; filter: none !important; }
+        .dashboard-section.fading-out { transform: none !important; filter: none !important; }
+        .dashboard-section .section-header,
+        .dashboard-section .section-row,
+        .dashboard-section .section-image,
+        .dashboard-section .section-summary,
+        .dashboard-section .section-content,
+        .dashboard-section .ai-insight,
+        .dashboard-section .ai-loading,
+        .dashboard-section [data-testid="stExpander"],
+        .dashboard-section .stPlotlyChart { transition-delay: 0s !important; }
+        .scroll-progress-nav { display: none; }
+        .main .block-container::before,
+        .main .block-container::after { display: none; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Inject scroll animations: fade in/out + parallax
+# Inject premium scroll engine: blur reveal, stagger, parallax, dot nav
 st.markdown("""
 <script>
 (function() {
+    'use strict';
+
+    // Progress dot navigation
+    const nav = document.createElement('div');
+    nav.className = 'scroll-progress-nav';
+    document.body.appendChild(nav);
+
+    const visibleSections = new Set();
+    let activeSectionIndex = -1;
+
+    function buildThresholds(steps) {
+        const t = [];
+        for (let i = 0; i <= steps; i++) t.push(i / steps);
+        return t;
+    }
+
     const fadeObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             const el = entry.target;
             if (entry.isIntersecting) {
                 el.classList.remove('fading-out');
                 el.classList.add('visible');
+                visibleSections.add(el);
             } else if (el.classList.contains('visible')) {
                 el.classList.remove('visible');
+                visibleSections.delete(el);
                 if (entry.boundingClientRect.top < 0) {
                     el.classList.add('fading-out');
                 } else {
@@ -587,19 +710,50 @@ st.markdown("""
                 }
             }
         });
+        updateActiveSection();
     }, {
-        threshold: [0, 0.05, 0.1, 0.2, 0.3],
-        rootMargin: '0px 0px -60px 0px'
+        threshold: buildThresholds(20),
+        rootMargin: '0px 0px -80px 0px'
     });
 
+    function updateActiveSection() {
+        const sections = Array.from(document.querySelectorAll('.dashboard-section.observed'));
+        const vh = window.innerHeight;
+        let bestIdx = -1, bestDist = Infinity;
+        sections.forEach((s, i) => {
+            s.classList.remove('active');
+            if (!visibleSections.has(s)) return;
+            const rect = s.getBoundingClientRect();
+            const dist = Math.abs(rect.top + rect.height / 2 - vh * 0.45);
+            if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+        });
+        if (bestIdx >= 0 && bestIdx !== activeSectionIndex) {
+            activeSectionIndex = bestIdx;
+            sections[bestIdx].classList.add('active');
+            nav.querySelectorAll('.dot').forEach((d, i) => {
+                d.classList.toggle('active', i === bestIdx);
+            });
+        }
+    }
+
+    // Multi-layer parallax
     let ticking = false;
     function updateParallax() {
-        const images = document.querySelectorAll('.dashboard-section.visible .section-image img');
         const vh = window.innerHeight;
-        images.forEach(img => {
+        document.querySelectorAll('.dashboard-section.visible .section-image img').forEach(img => {
             const rect = img.getBoundingClientRect();
             const ratio = Math.max(-1, Math.min(1, (rect.top + rect.height/2 - vh/2) / (vh/2)));
-            img.style.transform = 'translateY(' + (ratio * 20) + 'px)';
+            img.style.transform = 'translateY(' + (ratio * 25) + 'px) scale(1.05)';
+        });
+        document.querySelectorAll('.dashboard-section.visible .section-header').forEach(hdr => {
+            const rect = hdr.getBoundingClientRect();
+            const ratio = Math.max(-1, Math.min(1, (rect.top - vh/2) / (vh/2)));
+            hdr.style.transform = 'translateY(' + (ratio * -6) + 'px)';
+        });
+        document.querySelectorAll('.dashboard-section.visible .ai-insight').forEach(box => {
+            const rect = box.getBoundingClientRect();
+            const ratio = Math.max(-1, Math.min(1, (rect.top + rect.height/2 - vh/2) / (vh/2)));
+            box.style.transform = 'translateY(' + (ratio * 10) + 'px)';
         });
         ticking = false;
     }
@@ -607,14 +761,38 @@ st.markdown("""
         if (!ticking) { ticking = true; requestAnimationFrame(updateParallax); }
     }, { passive: true });
 
+    // Dot nav visibility
+    let navVisible = false;
+    window.addEventListener('scroll', function() {
+        const shouldShow = window.scrollY > 300;
+        if (shouldShow !== navVisible) {
+            navVisible = shouldShow;
+            nav.classList.toggle('show', shouldShow);
+        }
+    }, { passive: true });
+
+    // Observe sections + build dot nav
     function observeSections() {
         document.querySelectorAll('.dashboard-section:not(.observed)').forEach(el => {
             el.classList.add('observed');
             fadeObserver.observe(el);
         });
+        const allSections = document.querySelectorAll('.dashboard-section.observed');
+        if (allSections.length !== nav.children.length) {
+            nav.innerHTML = '';
+            allSections.forEach((section) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                dot.addEventListener('click', () => {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+                nav.appendChild(dot);
+            });
+        }
     }
     observeSections();
     new MutationObserver(observeSections).observe(document.body, { childList: true, subtree: true });
+    requestAnimationFrame(updateParallax);
 })();
 </script>
 """, unsafe_allow_html=True)
