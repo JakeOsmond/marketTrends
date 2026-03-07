@@ -163,6 +163,16 @@ PRICE_SENSITIVITY_TERMS = ["cheap travel insurance", "travel insurance deals",
 WHITE_LABEL_PARTNERS = ["Carnival cruise", "Fred Olsen cruise"]
 PARKING_CROSSSELL = ["airport parking", "airport parking UK", "meet and greet parking"]
 
+# Bespoke trend terms per section — give AI real-world context for each
+SECTION_TREND_TERMS = {
+    "market_demand": ["cheap flights", "travel chaos UK", "airline strikes", "holiday deals", "passport renewal UK"],
+    "divergence": ["GHIC card", "travel insurance comparison", "book holiday 2026", "do I need travel insurance", "EHIC card UK"],
+    "channels": ["airport parking deals", "compare travel insurance", "cruise holiday deals", "buy travel insurance online", "Holiday Extras"],
+    "competitors": ["Staysure reviews", "AllClear medical travel insurance", "cheapest travel insurance UK", "travel insurance over 70", "Defaqto travel insurance"],
+    "seasonal": ["summer holiday booking", "half term holidays", "ski holidays", "Easter holiday deals", "last minute holidays"],
+    "yoy": ["cost of living UK", "UK passport applications", "package holiday UK", "travel insurance price", "UK outbound travel"],
+}
+
 HX_STRATEGY_CONTEXT = """
 HOLIDAY EXTRAS MARKETING STRATEGY (frame all advice against these priorities):
 1. TAKE MARKET SHARE -- Increase GWP, grow market share, drive profitable new customer acquisition, improve AMT and Medical mix
@@ -185,6 +195,47 @@ RULES:
 - Name specifics: airlines, dates, destinations, news events. Vague is useless.
 - End with ONE action: who does what, which channel, by when.
 - MAX 280 characters total. Tweet-length. No filler. No preamble."""
+
+
+def fetch_section_trends() -> dict:
+    """Fetch bespoke Google Trends for each dashboard section."""
+    from pytrends.request import TrendReq
+    pytrends = TrendReq(hl="en-GB", tz=0)
+    results = {}
+    for section, terms in SECTION_TREND_TERMS.items():
+        section_data = {}
+        try:
+            pytrends.build_payload(terms[:5], cat=0, timeframe="today 12-m", geo="GB")
+            time.sleep(3)
+            interest = pytrends.interest_over_time()
+            if not interest.empty:
+                for term in terms:
+                    if term in interest.columns:
+                        recent = interest[term].tail(4).mean()
+                        earlier = interest[term].head(4).mean()
+                        change = ((recent - earlier) / earlier * 100) if earlier > 0 else 0
+                        section_data[term] = {
+                            "current": int(interest[term].iloc[-1]),
+                            "peak": int(interest[term].max()),
+                            "change_pct": round(change, 1),
+                            "trending": "up" if change > 10 else ("down" if change < -10 else "flat"),
+                        }
+        except Exception:
+            pass
+        results[section] = section_data
+    return results
+
+
+def _format_section_trends(section_key: str, section_trends: dict) -> str:
+    """Format bespoke trend data as context for AI prompts."""
+    data = section_trends.get(section_key, {})
+    if not data:
+        return ""
+    lines = ["RELATED GOOGLE TRENDS (UK, last 12 months):"]
+    for term, stats in data.items():
+        lines.append(f'  "{term}": {stats["current"]}/100 (peak {stats["peak"]}), '
+                     f'{stats["trending"]} {stats["change_pct"]:+.1f}%')
+    return "\n".join(lines)
 
 
 def load_all_data():
@@ -352,11 +403,15 @@ def main():
 
     log(f"  YoY: {yoy:+.1f}%, WoW: {wow:+.1f}%, Gap: {gap:+.1f}")
 
-    # 2. Extra trends
+    # 2. Extra trends + section trends
     log("Loading competitor & channel data...")
     extra_trends = load_extra_trends()
     hx_trends = load_hx_trends()
     log(f"  Extra: {list(extra_trends.keys())}, HX: {list(hx_trends.keys())}")
+
+    log("Fetching section-specific Google Trends...")
+    section_trends = fetch_section_trends()
+    log(f"  Section trends: {[k for k, v in section_trends.items() if v]}")
 
     # 3. Build contexts
     _ctx = build_context(sa_weekly, sources)
@@ -367,10 +422,13 @@ def main():
 
     # 4a. "What Matters Now"
     log("  What Matters Now...")
+    all_trends_ctx = "\n".join(_format_section_trends(k, section_trends) for k in SECTION_TREND_TERMS if _format_section_trends(k, section_trends))
     matters_q = (
         f"DATA:\n{_full_ctx}\n\nThe biggest market signals right now.\n"
+        f"\n{all_trends_ctx}\n\n"
         f"HX priorities: 1) Take market share 2) Maximise CLTV 3) Deliver brand promise 4) Build brand."
         f"\n\nIn 2-3 sentences, explain what these signals mean for Holiday Extras. "
+        f"Use the Google Trends data to explain WHY these things are happening. "
         f"REMEMBER: More people searching does NOT mean more HX customers. "
         f"What specific action should the team take THIS WEEK to capture the opportunity? "
         f"Be specific: who does what, on which channel, by when.")
@@ -378,9 +436,11 @@ def main():
 
     # 4b. Deep dive
     log("  Deep Dive...")
-    dd_q = (f"DATA:\n{_full_ctx}\n\nDo a deep investigation. What's REALLY driving the UK travel insurance "
-            f"market right now? Search the web for current news. Name specific airlines, destinations, "
-            f"events. Remember: more searches doesn't mean more Holiday Extras customers — "
+    dd_q = (f"DATA:\n{_full_ctx}\n\n{all_trends_ctx}\n\n"
+            f"Do a deep investigation. What's REALLY driving the UK travel insurance "
+            f"market right now? Use the Google Trends data above and search the web for current news. "
+            f"Name specific airlines, destinations, events. "
+            f"Remember: more searches doesn't mean more Holiday Extras customers — "
             f"how can HX capture this demand across their channels?")
     call_ai(dd_q, ANALYST_PROMPT)
 
@@ -397,7 +457,9 @@ FORMAT: Return 3-4 items MAX. Only the most important. For each:
 <b>[Headline]</b> -- [1 sentence what happened]. <b>HX action:</b> [1 sentence what to do].
 
 Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
-    news_user = "Search the web for the most important UK travel insurance news in the last 2-4 weeks. Include real headlines and sources."
+    news_user = ("Search the web for the most important UK travel insurance news in the last 2-4 weeks. "
+                  "Include real headlines and sources. Focus on anything affecting travel demand, "
+                  "insurance pricing, airline disruption, or competitor moves in the UK market.")
     cached_ai(f"{news_system[:50]}_{news_user[:50]}", news_system, news_user)
 
     # 4d. Trend analysis
@@ -405,10 +467,14 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
     recent = sa_weekly.tail(8)
     trend_str = " -> ".join(f"{r['date'].strftime('%b %Y')}: {float(r.get('combined', 0)):.0f}"
                             for _, r in recent.iterrows())
+    md_trends = _format_section_trends("market_demand", section_trends)
     trend_q = (f"DATA:\n{_ctx}\n\nRecent weekly search activity: {trend_str}. "
-               f"Currently {yoy:+.1f}% vs last year. "
-               f"Growing, shrinking, or flat — and why? One line on what to expect next month. "
-               f"One specific action HX should take to capture this demand (not just report it).")
+               f"Currently {yoy:+.1f}% vs last year, 4-week momentum {wow:+.1f}%. "
+               f"\n{md_trends}\n\n"
+               f"Using the Google Trends above (cheap flights, travel chaos, passport renewals etc), "
+               f"explain WHY travel insurance demand is {'rising' if yoy > 2 else 'falling' if yoy < -2 else 'flat'}. "
+               f"What real-world event or behaviour is driving this? "
+               f"One specific action HX should take THIS WEEK to capture this demand.")
     call_ai(trend_q, ANALYST_PROMPT)
 
     # 4e. Divergence (buyers vs dreamers)
@@ -423,10 +489,15 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
     else:
         gap_story = "stable"
 
-    div_q = (f"DATA:\n{_ctx}\n\n{'Insurance searches lead holiday searches' if gap > 0 else 'Holiday searches lead insurance searches'}. "
-             f"Gap has {gap_story} vs last year. "
-             f"Why — what real-world event or behaviour shift explains this? "
-             f"One specific thing HX should do right now to convert these searchers.")
+    div_trends = _format_section_trends("divergence", section_trends)
+    div_q = (f"DATA:\n{_ctx}\n\n{'Insurance searches lead holiday searches' if gap > 0 else 'Holiday searches lead insurance searches'} "
+             f"(insurance {i_now:.0f}, holidays {h_now:.0f}, gap {gap:+.0f}). "
+             f"Gap has {gap_story} vs last year (was {gap_last_year:+.0f}). "
+             f"\n{div_trends}\n\n"
+             f"Using the trends above (GHIC cards, 'do I need travel insurance', booking patterns), "
+             f"explain why {'insurance' if gap > 0 else 'holiday'} searches are leading. "
+             f"Are people closer to buying or still dreaming? "
+             f"One specific thing HX should do right now to convert these searchers into customers.")
     call_ai(div_q, ANALYST_PROMPT)
 
     # 4f. Channels
@@ -450,10 +521,15 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
         for t in comp_df.columns:
             comp_ctx += f"  {t}: {_trend_pct(comp_df, t):+.0f}%\n"
 
-    ch_q = (f"DATA:\n{_ctx}\n{park_ctx}\n{wl_ctx}\n{comp_ctx}\n\n"
-            f"4 channels: Direct (parking cross-sell), PPC/SEO, White Labels (Carnival, Fred Olsen), "
-            f"Aggregators (Compare the Market). Which channel has the biggest opportunity right now and why? "
-            f"One specific action per channel. Be blunt — skip any channel with nothing noteworthy.")
+    ch_trends = _format_section_trends("channels", section_trends)
+    park_ch = _trend_pct(park_df) if park_df is not None else 0
+    wl_ch = _trend_pct(wl_df) if wl_df is not None else 0
+    ch_q = (f"DATA:\n{_ctx}\n{park_ctx}\n{wl_ctx}\n{comp_ctx}\n\n{ch_trends}\n\n"
+            f"HX has 4 channels: Direct (airport parking cross-sell), PPC/SEO (new customers from search), "
+            f"White Labels (Carnival Cruises, Fred Olsen), Aggregators (Compare the Market, CYTI). "
+            f"Parking searches are {park_ch:+.0f}%, white label partner interest is {wl_ch:+.0f}%. "
+            f"Using the Google Trends above, which channel has the biggest opportunity RIGHT NOW? "
+            f"One specific action per channel that's moving. Skip channels with nothing noteworthy.")
     call_ai(ch_q, ANALYST_PROMPT)
 
     # 4g. Competitors
@@ -465,33 +541,49 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
             comp_context += f"\n{label}:\n"
             for t in df.columns:
                 comp_context += f"  {t}: {_trend_pct(df, t):+.0f}% trend\n"
-    comp_q = (f"DATA:\n{_ctx}\n{comp_context}\n\nWhich competitors are gaining or losing search share? "
-              f"Is 'cheap travel insurance' rising? Name names and say what HX should do — "
-              f"pricing, ad copy, or product. Skip competitors with no meaningful movement.")
+    comp_trends = _format_section_trends("competitors", section_trends)
+    price_ch = _trend_pct(price_df) if price_df is not None else 0
+    comp_q = (f"DATA:\n{_ctx}\n{comp_context}\n\n{comp_trends}\n\n"
+              f"Price sensitivity is {price_ch:+.0f}%. "
+              f"Using the Google Trends above (Staysure reviews, AllClear, cheapest TI, over-70s, Defaqto), "
+              f"which competitors are gaining or losing? Is price shopping rising or falling? "
+              f"Name specific competitors and say what HX should do — pricing, ad copy, or product positioning. "
+              f"Skip any competitor with no meaningful movement.")
     call_ai(comp_q, ANALYST_PROMPT)
 
     # 4h. Seasonal
     log("  Seasonal...")
     month = latest["date"].strftime("%B %Y") if hasattr(latest["date"], "strftime") else "this month"
+    seasonal_trends = _format_section_trends("seasonal", section_trends)
     seasonal_q = (f"DATA:\n{_ctx}\n\nIt's {month}. Market is {yoy:+.1f}% vs last year. "
+                  f"\n{seasonal_trends}\n\n"
+                  f"Using the trends above (summer bookings, half term, ski holidays, Easter, last minute), "
+                  f"what's driving seasonal demand right now? "
                   f"What happens to travel insurance demand in the next 6-8 weeks? "
-                  f"Key dates (school holidays, booking windows) and one thing HX should prepare now.")
+                  f"Name specific dates (school holidays, bank holidays, booking deadlines) and "
+                  f"one thing HX should prepare NOW to capture the next wave.")
     call_ai(seasonal_q, ANALYST_PROMPT)
 
     # 4i. Year-on-year
     log("  Year-on-Year...")
     h_yoy = ((h_now - h_last_year) / h_last_year * 100) if h_last_year else 0
     i_yoy = ((i_now - i_last_year) / i_last_year * 100) if i_last_year else 0
+    yoy_trends = _format_section_trends("yoy", section_trends)
     yoy_q = (f"DATA:\n{_ctx}\n\nOverall searches {yoy:+.1f}% vs last year. "
              f"Holiday searches: {h_yoy:+.0f}%. Insurance searches: {i_yoy:+.0f}%. "
-             f"Why — more travellers, or different search behaviour? "
-             f"What does this mean for HX sales specifically (not just market size)?")
+             f"\n{yoy_trends}\n\n"
+             f"Using the trends above (cost of living, passport applications, package holidays, outbound travel), "
+             f"explain the year-on-year change. Is it more travellers, different search behaviour, or economic shifts? "
+             f"What does this mean specifically for HX sales — not just market size but customer acquisition?")
     call_ai(yoy_q, ANALYST_PROMPT)
 
     # 4j. Cross-source validation
     log("  Cross-Source...")
-    xsrc_q = (f"DATA:\n{_ctx}\n\n5 data sources checked. Do they agree or conflict? "
-              f"Is this a real market shift or noise? One-line confidence verdict for HX decision-makers.")
+    xsrc_q = (f"DATA:\n{_ctx}\n\n"
+              f"5 data sources: Google Trends (weekly), UK CAA (annual), ONS (quarterly), Eurostat (monthly), World Bank (annual). "
+              f"Do they agree or conflict on the direction of travel? "
+              f"Which sources are most up-to-date? Is this a real market shift or noise? "
+              f"One-line confidence verdict for HX decision-makers.")
     call_ai(xsrc_q, ANALYST_PROMPT)
 
     # 5. Done

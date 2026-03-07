@@ -49,6 +49,16 @@ PRICE_SENSITIVITY_TERMS = ["cheap travel insurance", "travel insurance deals",
 WHITE_LABEL_PARTNERS = ["Carnival cruise", "Fred Olsen cruise"]
 PARKING_CROSSSELL = ["airport parking", "airport parking UK", "meet and greet parking"]
 
+# Bespoke trend terms per section — give AI real-world context for each
+SECTION_TREND_TERMS = {
+    "market_demand": ["cheap flights", "travel chaos UK", "airline strikes", "holiday deals", "passport renewal UK"],
+    "divergence": ["GHIC card", "travel insurance comparison", "book holiday 2026", "do I need travel insurance", "EHIC card UK"],
+    "channels": ["airport parking deals", "compare travel insurance", "cruise holiday deals", "buy travel insurance online", "Holiday Extras"],
+    "competitors": ["Staysure reviews", "AllClear medical travel insurance", "cheapest travel insurance UK", "travel insurance over 70", "Defaqto travel insurance"],
+    "seasonal": ["summer holiday booking", "half term holidays", "ski holidays", "Easter holiday deals", "last minute holidays"],
+    "yoy": ["cost of living UK", "UK passport applications", "package holiday UK", "travel insurance price", "UK outbound travel"],
+}
+
 # ---------------------------------------------------------------------------
 # Holiday Extras official brand palette
 # ---------------------------------------------------------------------------
@@ -898,6 +908,48 @@ def load_hx_trends():
     return results
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_section_trends() -> dict:
+    """Fetch bespoke Google Trends for each dashboard section."""
+    from pytrends.request import TrendReq
+    pytrends = TrendReq(hl="en-GB", tz=0)
+    results = {}
+    for section, terms in SECTION_TREND_TERMS.items():
+        section_data = {}
+        try:
+            pytrends.build_payload(terms[:5], cat=0, timeframe="today 12-m", geo="GB")
+            time.sleep(3)
+            interest = pytrends.interest_over_time()
+            if not interest.empty:
+                for term in terms:
+                    if term in interest.columns:
+                        recent = interest[term].tail(4).mean()
+                        earlier = interest[term].head(4).mean()
+                        change = ((recent - earlier) / earlier * 100) if earlier > 0 else 0
+                        section_data[term] = {
+                            "current": int(interest[term].iloc[-1]),
+                            "peak": int(interest[term].max()),
+                            "change_pct": round(change, 1),
+                            "trending": "up" if change > 10 else ("down" if change < -10 else "flat"),
+                        }
+        except Exception:
+            pass
+        results[section] = section_data
+    return results
+
+
+def _format_section_trends(section_key: str, section_trends: dict) -> str:
+    """Format bespoke trend data as context for AI prompts."""
+    data = section_trends.get(section_key, {})
+    if not data:
+        return ""
+    lines = ["RELATED GOOGLE TRENDS (UK, last 12 months):"]
+    for term, stats in data.items():
+        lines.append(f'  "{term}": {stats["current"]}/100 (peak {stats["peak"]}), '
+                     f'{stats["trending"]} {stats["change_pct"]:+.1f}%')
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Seasonal adjustment
 # ---------------------------------------------------------------------------
@@ -1661,7 +1713,7 @@ def _section_with_image(header: str, img_key: str, img_desc: str, summary: str):
         st.markdown(f'<div class="section-summary">{summary}</div>', unsafe_allow_html=True)
 
 
-def render_trend(sa_weekly, _ctx, c_now, yoy, wow, max_date):
+def render_trend(sa_weekly, _ctx, c_now, yoy, wow, max_date, section_trends=None):
     # Build summary and image
     if yoy > 5:
         summary = f'More people are searching for travel insurance — <strong class="up">up {abs(yoy):.0f}%</strong> vs last year. In the last 4 weeks alone, searches have moved <strong class="{"up" if wow > 0 else "down"}">{wow:+.1f}%</strong>.'
@@ -1698,10 +1750,14 @@ def render_trend(sa_weekly, _ctx, c_now, yoy, wow, max_date):
     recent = sa_weekly.tail(8)
     trend_str = " -> ".join(f"{r['date'].strftime('%b %Y')}: {float(r.get('combined_sa', r.get('combined',0))):.0f}"
                             for _, r in recent.iterrows())
+    trends_ctx = _format_section_trends("market_demand", section_trends or {})
     q = (f"DATA:\n{_ctx}\n\nRecent weekly search activity: {trend_str}. "
-         f"Currently {yoy:+.1f}% vs last year. "
-         f"Growing, shrinking, or flat — and why? One line on what to expect next month. "
-         f"One specific action HX should take to capture this demand (not just report it).")
+         f"Currently {yoy:+.1f}% vs last year, 4-week momentum {wow:+.1f}%. "
+         f"\n{trends_ctx}\n\n"
+         f"Using the Google Trends above (cheap flights, travel chaos, passport renewals etc), "
+         f"explain WHY travel insurance demand is {'rising' if yoy > 2 else 'falling' if yoy < -2 else 'flat'}. "
+         f"What real-world event or behaviour is driving this? "
+         f"One specific action HX should take THIS WEEK to capture this demand.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing market trend", HX_PURPLE_LIGHT), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -1712,7 +1768,7 @@ def render_trend(sa_weekly, _ctx, c_now, yoy, wow, max_date):
     return time_range
 
 
-def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_year):
+def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_year, section_trends=None):
     gap_last_year = i_last_year - h_last_year
     gap_change = gap - gap_last_year
 
@@ -1766,10 +1822,15 @@ def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_ye
         if div_fig.data:
             st.plotly_chart(div_fig, use_container_width=True, config={"displayModeBar": False})
 
-    q = (f"DATA:\n{_ctx}\n\n{'Insurance searches lead holiday searches' if gap > 0 else 'Holiday searches lead insurance searches'}. "
-         f"Gap has {gap_story} vs last year. "
-         f"Why — what real-world event or behaviour shift explains this? "
-         f"One specific thing HX should do right now to convert these searchers.")
+    trends_ctx = _format_section_trends("divergence", section_trends or {})
+    q = (f"DATA:\n{_ctx}\n\n{'Insurance searches lead holiday searches' if gap > 0 else 'Holiday searches lead insurance searches'} "
+         f"(insurance {i_now:.0f}, holidays {h_now:.0f}, gap {gap:+.0f}). "
+         f"Gap has {gap_story} vs last year (was {gap_last_year:+.0f}). "
+         f"\n{trends_ctx}\n\n"
+         f"Using the trends above (GHIC cards, 'do I need travel insurance', booking patterns), "
+         f"explain why {'insurance' if gap > 0 else 'holiday'} searches are leading. "
+         f"Are people closer to buying or still dreaming? "
+         f"One specific thing HX should do right now to convert these searchers into customers.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing searchers vs dreamers", TEAL), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -1779,7 +1840,7 @@ def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_ye
         ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", TEAL), unsafe_allow_html=True)
 
 
-def render_channels(hx_trends, extra_trends, _ctx, comp_df):
+def render_channels(hx_trends, extra_trends, _ctx, comp_df, section_trends=None):
     # Build one-liner from data (plain English)
     park_ch = _trend_pct(hx_trends.get("parking"))
     wl_ch = _trend_pct(hx_trends.get("white_labels"))
@@ -1853,10 +1914,13 @@ def render_channels(hx_trends, extra_trends, _ctx, comp_df):
         for t in comp_df.columns:
             comp_ctx += f"  {t}: {_trend_pct(comp_df, t):+.0f}%\n"
 
-    ch_q = (f"DATA:\n{_ctx}\n{park_ctx}\n{wl_ctx}\n{comp_ctx}\n\n"
-            f"4 channels: Direct (parking cross-sell), PPC/SEO, White Labels (Carnival, Fred Olsen), "
-            f"Aggregators (Compare the Market). Which channel has the biggest opportunity right now and why? "
-            f"One specific action per channel. Be blunt — skip any channel with nothing noteworthy.")
+    trends_ctx = _format_section_trends("channels", section_trends or {})
+    ch_q = (f"DATA:\n{_ctx}\n{park_ctx}\n{wl_ctx}\n{comp_ctx}\n\n{trends_ctx}\n\n"
+            f"HX has 4 channels: Direct (airport parking cross-sell), PPC/SEO (new customers from search), "
+            f"White Labels (Carnival Cruises, Fred Olsen), Aggregators (Compare the Market, CYTI). "
+            f"Parking searches are {park_ch:+.0f}%, white label partner interest is {wl_ch:+.0f}%. "
+            f"Using the Google Trends above, which channel has the biggest opportunity RIGHT NOW? "
+            f"One specific action per channel that's moving. Skip channels with nothing noteworthy.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing channels", HX_PURPLE_LIGHT), unsafe_allow_html=True)
     ch_result = _call_openai_with_timeout(ch_q, timeout_secs=10)
@@ -1866,7 +1930,7 @@ def render_channels(hx_trends, extra_trends, _ctx, comp_df):
         ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", HX_PURPLE_LIGHT), unsafe_allow_html=True)
 
 
-def render_competitors(extra_trends, _ctx):
+def render_competitors(extra_trends, _ctx, section_trends=None):
     comp_df = extra_trends.get("competitors")
     price_df = extra_trends.get("price_sensitivity")
 
@@ -1931,9 +1995,13 @@ def render_competitors(extra_trends, _ctx):
             comp_context += f"\n{label}:\n"
             for t in df.columns:
                 comp_context += f"  {t}: {_trend_pct(df, t):+.0f}% trend\n"
-    q = (f"DATA:\n{_ctx}\n{comp_context}\n\nWhich competitors are gaining or losing search share? "
-         f"Is 'cheap travel insurance' rising? Name names and say what HX should do — "
-         f"pricing, ad copy, or product. Skip competitors with no meaningful movement.")
+    trends_ctx = _format_section_trends("competitors", section_trends or {})
+    q = (f"DATA:\n{_ctx}\n{comp_context}\n\n{trends_ctx}\n\n"
+         f"Price sensitivity is {price_ch:+.0f}%. "
+         f"Using the Google Trends above (Staysure reviews, AllClear, cheapest TI, over-70s, Defaqto), "
+         f"which competitors are gaining or losing? Is price shopping rising or falling? "
+         f"Name specific competitors and say what HX should do — pricing, ad copy, or product positioning. "
+         f"Skip any competitor with no meaningful movement.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing competitors", ORANGE), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -1957,7 +2025,9 @@ FORMAT: Return 3-4 items MAX. Only the most important. For each:
 
 Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
 
-NEWS_USER_PROMPT = "Search the web for the most important UK travel insurance news in the last 2-4 weeks. Include real headlines and sources."
+NEWS_USER_PROMPT = ("Search the web for the most important UK travel insurance news in the last 2-4 weeks. "
+                    "Include real headlines and sources. Focus on anything affecting travel demand, "
+                    "insurance pricing, airline disruption, or competitor moves in the UK market.")
 
 
 def pre_generate_news() -> str:
@@ -2040,7 +2110,7 @@ def render_channel_table(yoy, extra_trends, hx_trends):
     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
 
-def render_seasonal(weekly, latest_date, _ctx, yoy):
+def render_seasonal(weekly, latest_date, _ctx, yoy, section_trends=None):
     month = latest_date.strftime("%B") if hasattr(latest_date, "strftime") else "this month"
     st.markdown('<div class="section-header">Seasonal Pattern</div>', unsafe_allow_html=True)
 
@@ -2066,9 +2136,14 @@ def render_seasonal(weekly, latest_date, _ctx, yoy):
                 else:
                     st.caption(f"No {lbl.lower()} data.")
 
+    trends_ctx = _format_section_trends("seasonal", section_trends or {})
     q = (f"DATA:\n{_ctx}\n\nIt's {month}. Market is {yoy:+.1f}% vs last year. "
+         f"\n{trends_ctx}\n\n"
+         f"Using the trends above (summer bookings, half term, ski holidays, Easter, last minute), "
+         f"what's driving seasonal demand right now? "
          f"What happens to travel insurance demand in the next 6-8 weeks? "
-         f"Key dates (school holidays, booking windows) and one thing HX should prepare now.")
+         f"Name specific dates (school holidays, bank holidays, booking deadlines) and "
+         f"one thing HX should prepare NOW to capture the next wave.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing seasonal patterns", ORANGE), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -2078,7 +2153,7 @@ def render_seasonal(weekly, latest_date, _ctx, yoy):
         ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", ORANGE), unsafe_allow_html=True)
 
 
-def render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy):
+def render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy, section_trends=None):
     st.markdown('<div class="section-header">Year-on-Year Growth</div>', unsafe_allow_html=True)
 
     h_yoy = ((h_now - h_last_year) / h_last_year * 100) if h_last_year else 0
@@ -2095,10 +2170,13 @@ def render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i
         else:
             st.caption("Not enough data.")
 
+    trends_ctx = _format_section_trends("yoy", section_trends or {})
     q = (f"DATA:\n{_ctx}\n\nOverall searches {yoy:+.1f}% vs last year. "
          f"Holiday searches: {h_yoy:+.0f}%. Insurance searches: {i_yoy:+.0f}%. "
-         f"Why — more travellers, or different search behaviour? "
-         f"What does this mean for HX sales specifically (not just market size)?")
+         f"\n{trends_ctx}\n\n"
+         f"Using the trends above (cost of living, passport applications, package holidays, outbound travel), "
+         f"explain the year-on-year change. Is it more travellers, different search behaviour, or economic shifts? "
+         f"What does this mean specifically for HX sales — not just market size but customer acquisition?")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing year-on-year", MAGENTA), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -2122,8 +2200,30 @@ def render_quarterly(quarterly, time_range, max_date, _ctx):
         else:
             st.caption("No quarterly data available.")
 
-    q = (f"DATA:\n{_ctx}\n\n5 data sources checked. Do they agree or conflict? "
-         f"Is this a real market shift or noise? One-line confidence verdict for HX decision-makers.")
+    # Build source-specific context from quarterly data
+    src_ctx = ""
+    if not quarterly.empty:
+        latest_q = quarterly.iloc[-1] if len(quarterly) > 0 else None
+        prev_q = quarterly.iloc[-2] if len(quarterly) > 1 else None
+        if latest_q is not None:
+            src_parts = []
+            for col in quarterly.columns:
+                if col != "quarter" and pd.notna(latest_q.get(col)):
+                    val = float(latest_q[col])
+                    prev_val = float(prev_q[col]) if prev_q is not None and pd.notna(prev_q.get(col)) else None
+                    if prev_val and prev_val > 0:
+                        ch = ((val - prev_val) / prev_val) * 100
+                        src_parts.append(f"  {col}: {ch:+.0f}% quarter-on-quarter")
+                    else:
+                        src_parts.append(f"  {col}: latest value {val:.0f}")
+            if src_parts:
+                src_ctx = "\nSOURCE MOVEMENTS:\n" + "\n".join(src_parts)
+
+    q = (f"DATA:\n{_ctx}\n{src_ctx}\n\n"
+         f"5 data sources: Google Trends (weekly), UK CAA (annual), ONS (quarterly), Eurostat (monthly), World Bank (annual). "
+         f"Do they agree or conflict on the direction of travel? "
+         f"Which sources are most up-to-date? Is this a real market shift or noise? "
+         f"One-line confidence verdict for HX decision-makers.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI checking data confidence", HX_PURPLE_LIGHT), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -2208,10 +2308,11 @@ def main():
         loader.markdown(loading_screen(2), unsafe_allow_html=True)
     extra_trends = load_extra_trends()
 
-    # Step 4: HX channel data
+    # Step 4: HX channel data + section trends
     if is_cold_start:
         loader.markdown(loading_screen(3), unsafe_allow_html=True)
     hx_trends = load_hx_trends()
+    section_trends = fetch_section_trends()
 
     # Step 5: Crunch numbers
     if is_cold_start:
@@ -2267,11 +2368,15 @@ def main():
     top_signals = [(k, r) for k, _, r in priorities[:3] if r]
     matters_result = None
     if top_signals:
+        # Combine trend context from the top signal sections
+        top_trends = "\n".join(_format_section_trends(k, section_trends) for k, _ in top_signals if _format_section_trends(k, section_trends))
         matters_q = (
             f"DATA:\n{_full_ctx}\n\nThe biggest signals right now are:\n"
             + "\n".join(f"- {r}" for _, r in top_signals)
-            + f"\n\nHX priorities: 1) Take market share 2) Maximise CLTV 3) Deliver brand promise 4) Build brand."
+            + f"\n\n{top_trends}\n\n"
+            f"HX priorities: 1) Take market share 2) Maximise CLTV 3) Deliver brand promise 4) Build brand."
             f"\n\nIn 2-3 sentences, explain what these signals mean for Holiday Extras. "
+            f"Use the Google Trends data to explain WHY these things are happening. "
             f"REMEMBER: More people searching does NOT mean more HX customers. "
             f"What specific action should the team take THIS WEEK to capture the opportunity? "
             f"Be specific: who does what, on which channel, by when.")
@@ -2279,9 +2384,13 @@ def main():
 
     # Step 6b: Pre-generate news + deep dive (so they're cached before render)
     news_result = pre_generate_news()
-    dd_q = (f"DATA:\n{_full_ctx}\n\nDo a deep investigation. What's REALLY driving the UK travel insurance "
-            f"market right now? Search the web for current news. Name specific airlines, destinations, "
-            f"events. Remember: more searches doesn't mean more Holiday Extras customers — "
+    # Combine all section trends for the deep dive
+    all_trends = "\n".join(_format_section_trends(k, section_trends) for k in SECTION_TREND_TERMS if _format_section_trends(k, section_trends))
+    dd_q = (f"DATA:\n{_full_ctx}\n\n{all_trends}\n\n"
+            f"Do a deep investigation. What's REALLY driving the UK travel insurance "
+            f"market right now? Use the Google Trends data above and search the web for current news. "
+            f"Name specific airlines, destinations, events. "
+            f"Remember: more searches doesn't mean more Holiday Extras customers — "
             f"how can HX capture this demand across their channels?")
     dd_result = _call_openai_with_timeout(dd_q, timeout_secs=15)
 
@@ -2419,26 +2528,26 @@ def main():
             st.markdown('<span class="scroll-section-marker">&nbsp;</span>', unsafe_allow_html=True)
 
             if section_key == "trend":
-                time_range = render_trend(sa_weekly, _ctx, c_now, yoy, wow, sa_weekly["date"].max())
+                time_range = render_trend(sa_weekly, _ctx, c_now, yoy, wow, sa_weekly["date"].max(), section_trends)
 
             elif section_key == "divergence":
-                render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_year)
+                render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_year, section_trends)
 
             elif section_key == "channels":
-                render_channels(hx_trends, extra_trends, _ctx, comp_df)
+                render_channels(hx_trends, extra_trends, _ctx, comp_df, section_trends)
                 render_channel_table(yoy, extra_trends, hx_trends)
 
             elif section_key == "competitors":
-                comp_df = render_competitors(extra_trends, _ctx)
+                comp_df = render_competitors(extra_trends, _ctx, section_trends)
 
             elif section_key == "news":
                 render_news(pre_result=news_result)
 
             elif section_key == "seasonal":
-                render_seasonal(weekly, latest_date, _ctx, yoy)
+                render_seasonal(weekly, latest_date, _ctx, yoy, section_trends)
 
             elif section_key == "yoy":
-                render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy)
+                render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy, section_trends)
 
             elif section_key == "quarterly":
                 render_quarterly(quarterly, time_range, sa_weekly["date"].max(), _ctx)
