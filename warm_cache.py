@@ -173,25 +173,19 @@ HOLIDAY EXTRAS MARKETING STRATEGY (frame all advice against these priorities):
 CHANNELS: Direct (parking cross-sell), PPC/SEO (new acquisition), White Labels (Carnival, Fred Olsen, retail partners), Aggregators (Compare the Market, CYTI)
 """
 
-ANALYST_PROMPT = f"""You are talking to the Holiday Extras travel insurance team. They are NOT data people. Explain what the numbers mean like you're chatting to a colleague over coffee.
+ANALYST_PROMPT = f"""You brief the Holiday Extras insurance team. They're busy. Every word must earn its place.
 
 {HX_STRATEGY_CONTEXT}
 
 RULES:
-- Search the web for the latest relevant news to explain WHY numbers are moving.
-- The numbers are already adjusted for the time of year. Every change is REAL, not seasonal.
-- Compare to last year. Say "up 15% vs last year" not "index at 115". NEVER use the word "index".
-- NEVER use jargon: no "SA", "seasonally adjusted", "basis points", "index", "normalised". Use plain English.
-- Say "more people are searching for travel insurance" not "insurance search interest is elevated".
-- CRITICAL: More people searching does NOT mean more customers buying from Holiday Extras. Be realistic.
-  "Demand is growing" means the opportunity is bigger, NOT that HX is automatically winning. Suggest how to CAPTURE that demand.
-- TERMINOLOGY: "Dreaming" = people searching for holidays (future insurance buyers). "Buying" = people actively searching for travel insurance. Always anchor "buying" back to insurance specifically.
-- Start with the headline -- the one thing they should walk away knowing.
-- Write short sentences. If your nan wouldn't understand it, rewrite it.
-- Give specific real-world reasons: name airlines, mention school holidays by date, reference actual news you found.
-- End with one specific thing to DO or watch out for, tied to the HX priorities above. Make it actionable: WHO should do WHAT by WHEN.
-- TWO short paragraphs max. No bullet points. No filler words.
-- Bold the important bits so someone skimming gets the point."""
+- Lead with the ONE thing that matters most. Bold it.
+- Plain English only. No jargon. No "index", "SA", "normalised", "basis points".
+- Say "up 15% vs last year" — never "index at 115".
+- All data is Google search volume, NOT sales. More searches ≠ more HX customers. Say how to CAPTURE demand, not just report it.
+- Name specifics: airlines, dates, destinations, news events. Vague = useless.
+- End with ONE action: who does what, which channel, by when.
+- MAX 3 sentences. If you can say it in fewer, do. No filler. No preamble.
+- Bold the key facts for skimmers."""
 
 
 def load_all_data():
@@ -393,14 +387,12 @@ def main():
 
     # 4c. News
     log("  News...")
-    news_system = f"""You are a UK travel insurance market analyst at Holiday Extras.
-Search the web for the most important recent news affecting UK travel insurance.
+    news_system = f"""Search the web for UK travel insurance news from the last 2 weeks. Only include stories that directly affect Holiday Extras.
 {HX_STRATEGY_CONTEXT}
-FORMAT: Return 4-6 items. For each:
-**[Headline]** -- [1-2 sentence summary]. **Holiday Extras impact:** [1 sentence action tied to HX priorities].
+FORMAT: Return 3-4 items MAX. Only the most important. For each:
+**[Headline]** — [1 sentence what happened]. **HX action:** [1 sentence what to do].
 
-Focus on: FCA regulation, airline news, cruise industry, consumer spending, school holidays,
-weather events, destination warnings, competitor moves. Include real sources."""
+Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
     news_user = "Search the web for the most important UK travel insurance news in the last 2-4 weeks. Include real headlines and sources."
     cached_ai(f"{news_system[:50]}_{news_user[:50]}", news_system, news_user)
 
@@ -411,8 +403,8 @@ weather events, destination warnings, competitor moves. Include real sources."""
                             for _, r in recent.iterrows())
     trend_q = (f"DATA:\n{_ctx}\n\nRecent weekly search activity: {trend_str}. "
                f"Currently {yoy:+.1f}% vs last year. "
-               f"Is the market growing, shrinking, or flat? What should Holiday Extras expect next month? "
-               f"Remember: more searches doesn't mean more HX customers — what should the team DO to capture this?")
+               f"Growing, shrinking, or flat — and why? One line on what to expect next month. "
+               f"One specific action HX should take to capture this demand (not just report it).")
     call_ai(trend_q, ANALYST_PROMPT)
 
     # 4e. Divergence (buyers vs dreamers)
@@ -427,11 +419,10 @@ weather events, destination warnings, competitor moves. Include real sources."""
     else:
         gap_story = "stable"
 
-    div_q = (f"DATA:\n{_ctx}\n\nRight now, {'more people are searching for travel insurance (buying) than dreaming about holidays' if gap > 0 else 'more people are dreaming about holidays than searching for travel insurance (buying)'}. "
-             f"Last year it was {'the same' if abs(gap_last_year) < 5 else 'the opposite' if (gap > 0) != (gap_last_year > 0) else 'similar'}. "
-             f"The gap has {gap_story} vs last year. "
-             f"'Dreaming' = searching for holidays (future insurance buyers). 'Buying' = actively searching for travel insurance. "
-             f"Why is the gap like this? What real-world events explain it? What should Holiday Extras do to capture these people?")
+    div_q = (f"DATA:\n{_ctx}\n\n{'Insurance searches lead holiday searches' if gap > 0 else 'Holiday searches lead insurance searches'}. "
+             f"Gap has {gap_story} vs last year. "
+             f"Why — what real-world event or behaviour shift explains this? "
+             f"One specific thing HX should do right now to convert these searchers.")
     call_ai(div_q, ANALYST_PROMPT)
 
     # 4f. Channels
@@ -456,11 +447,9 @@ weather events, destination warnings, competitor moves. Include real sources."""
             comp_ctx += f"  {t}: {_trend_pct(comp_df, t):+.0f}%\n"
 
     ch_q = (f"DATA:\n{_ctx}\n{park_ctx}\n{wl_ctx}\n{comp_ctx}\n\n"
-            f"Holiday Extras sells through 4 channels: Direct (parking cross-sell), PPC/SEO, "
-            f"White Labels (Carnival, Fred Olsen cruises), and Aggregators (Compare the Market). "
-            f"Based on the data, which channel has the biggest opportunity RIGHT NOW? "
-            f"Remember: more people searching doesn't mean they're buying from us — "
-            f"how do we capture this demand? Give one specific action per channel.")
+            f"4 channels: Direct (parking cross-sell), PPC/SEO, White Labels (Carnival, Fred Olsen), "
+            f"Aggregators (Compare the Market). Which channel has the biggest opportunity right now and why? "
+            f"One specific action per channel. Be blunt — skip any channel with nothing noteworthy.")
     call_ai(ch_q, ANALYST_PROMPT)
 
     # 4g. Competitors
@@ -472,37 +461,33 @@ weather events, destination warnings, competitor moves. Include real sources."""
             comp_context += f"\n{label}:\n"
             for t in df.columns:
                 comp_context += f"  {t}: {_trend_pct(df, t):+.0f}% trend\n"
-    comp_q = (f"DATA:\n{_ctx}\n{comp_context}\n\nAre any competitors getting more popular? "
-              f"Are more people searching for 'cheap travel insurance'? "
-              f"What does this mean for Holiday Extras — should we adjust our pricing, "
-              f"our ad copy, or our product? Be specific about which competitors and what to do.")
+    comp_q = (f"DATA:\n{_ctx}\n{comp_context}\n\nWhich competitors are gaining or losing search share? "
+              f"Is 'cheap travel insurance' rising? Name names and say what HX should do — "
+              f"pricing, ad copy, or product. Skip competitors with no meaningful movement.")
     call_ai(comp_q, ANALYST_PROMPT)
 
     # 4h. Seasonal
     log("  Seasonal...")
     month = latest["date"].strftime("%B %Y") if hasattr(latest["date"], "strftime") else "this month"
-    seasonal_q = (f"DATA:\n{_ctx}\n\nIt's {month}. The market is {yoy:+.1f}% vs last year. "
-                  f"What normally happens to travel insurance demand over the next 6-8 weeks? "
-                  f"When do school holidays start? When's the next big booking window? "
-                  f"What should Holiday Extras prepare for?")
+    seasonal_q = (f"DATA:\n{_ctx}\n\nIt's {month}. Market is {yoy:+.1f}% vs last year. "
+                  f"What happens to travel insurance demand in the next 6-8 weeks? "
+                  f"Key dates (school holidays, booking windows) and one thing HX should prepare now.")
     call_ai(seasonal_q, ANALYST_PROMPT)
 
     # 4i. Year-on-year
     log("  Year-on-Year...")
     h_yoy = ((h_now - h_last_year) / h_last_year * 100) if h_last_year else 0
     i_yoy = ((i_now - i_last_year) / i_last_year * 100) if i_last_year else 0
-    yoy_q = (f"DATA:\n{_ctx}\n\nOverall searches are {yoy:+.1f}% vs last year. "
+    yoy_q = (f"DATA:\n{_ctx}\n\nOverall searches {yoy:+.1f}% vs last year. "
              f"Holiday searches: {h_yoy:+.0f}%. Insurance searches: {i_yoy:+.0f}%. "
-             f"What changed in the UK travel market to cause this? "
-             f"Is this because MORE people are travelling, or because the SAME people are searching differently? "
-             f"What does this mean for Holiday Extras sales — not just market size?")
+             f"Why — more travellers, or different search behaviour? "
+             f"What does this mean for HX sales specifically (not just market size)?")
     call_ai(yoy_q, ANALYST_PROMPT)
 
     # 4j. Cross-source validation
     log("  Cross-Source...")
-    xsrc_q = (f"DATA:\n{_ctx}\n\nWe check 5 different data sources to make sure the trend is real. "
-              f"Do they all agree? Is this a genuine shift in the market, or just noise in one source? "
-              f"How confident should Holiday Extras be in making decisions based on this data?")
+    xsrc_q = (f"DATA:\n{_ctx}\n\n5 data sources checked. Do they agree or conflict? "
+              f"Is this a real market shift or noise? One-line confidence verdict for HX decision-makers.")
     call_ai(xsrc_q, ANALYST_PROMPT)
 
     # 5. Done
