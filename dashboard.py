@@ -113,120 +113,82 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #1A1528; }
     .block-container { padding-top: 1.5rem; padding-bottom: 1rem; }
 
-    /* === PREMIUM SCROLL ANIMATIONS === */
+    /* Scroll section markers — hidden, used by JS to find sections */
+    .scroll-section-marker { display: none; }
 
-    /* Viewport edge gradient masks — content emerges from darkness */
-    .main .block-container::before,
-    .main .block-container::after {
-        content: '';
-        position: fixed;
-        left: 0; right: 0;
-        height: 120px;
-        pointer-events: none;
-        z-index: 10;
-    }
-    .main .block-container::before {
-        top: 0;
-        background: linear-gradient(to bottom, #0F0B18 0%, #0F0B18 20%, transparent 100%);
-    }
-    .main .block-container::after {
-        bottom: 0;
-        background: linear-gradient(to top, #0F0B18 0%, #0F0B18 20%, transparent 100%);
-    }
-
-    /* Section base — hidden state with blur */
-    .dashboard-section {
+    /* === SCROLL REVEAL — clean, one-shot fade + rise === */
+    .scroll-section {
         opacity: 0;
-        transform: translateY(50px) scale(0.97);
-        filter: blur(6px);
+        transform: translateY(24px);
+        transition: opacity 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                    transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         padding: 2.5rem 0;
         margin: 0.5rem 0;
         border-bottom: 1px solid rgba(45, 36, 69, 0.3);
-        will-change: opacity, transform, filter;
-        transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-                    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-                    filter 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-                    border-color 0.6s ease;
     }
-    .dashboard-section:last-child { border-bottom: none; }
-    .dashboard-section.visible {
+    .scroll-section:last-child { border-bottom: none; }
+    .scroll-section.revealed {
         opacity: 1;
-        transform: translateY(0) scale(1);
-        filter: blur(0px);
-    }
-    .dashboard-section.active {
-        border-bottom-color: rgba(84, 46, 145, 0.5);
-        box-shadow: 0 1px 0 0 rgba(155, 114, 207, 0.15);
-    }
-    .dashboard-section.fading-out {
-        opacity: 0;
-        transform: translateY(-35px) scale(0.97);
-        filter: blur(4px);
-        transition: opacity 0.5s cubic-bezier(0.4, 0, 1, 1),
-                    transform 0.5s cubic-bezier(0.4, 0, 1, 1),
-                    filter 0.5s cubic-bezier(0.4, 0, 1, 1);
+        transform: translateY(0);
     }
 
-    /* Staggered child cascade — elements animate in sequentially */
-    .dashboard-section .section-header,
-    .dashboard-section .section-row,
-    .dashboard-section .section-image,
-    .dashboard-section .section-summary,
-    .dashboard-section .section-content,
-    .dashboard-section .ai-insight,
-    .dashboard-section .ai-loading {
+    /* 3-tier stagger: header → body → supplemental */
+    .scroll-section .section-header,
+    .scroll-section .section-row,
+    .scroll-section .section-image,
+    .scroll-section .section-summary,
+    .scroll-section .section-content,
+    .scroll-section .ai-insight,
+    .scroll-section .ai-loading {
         opacity: 0;
-        transform: translateY(20px);
-        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateY(16px);
+        transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                    transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-    .dashboard-section.visible .section-header {
-        opacity: 1; transform: translateY(0); transition-delay: 0.05s;
+    .scroll-section.revealed .section-header {
+        opacity: 1; transform: translateY(0); transition-delay: 0s;
     }
-    .dashboard-section.visible .section-image {
+    .scroll-section.revealed .section-row,
+    .scroll-section.revealed .section-image,
+    .scroll-section.revealed .section-summary,
+    .scroll-section.revealed .section-content {
+        opacity: 1; transform: translateY(0); transition-delay: 0.06s;
+    }
+    .scroll-section.revealed .ai-insight,
+    .scroll-section.revealed .ai-loading {
         opacity: 1; transform: translateY(0); transition-delay: 0.12s;
     }
-    .dashboard-section.visible .section-row {
-        opacity: 1; transform: translateY(0); transition-delay: 0.1s;
-    }
-    .dashboard-section.visible .section-summary,
-    .dashboard-section.visible .section-content {
-        opacity: 1; transform: translateY(0); transition-delay: 0.18s;
-    }
-    .dashboard-section.visible .ai-insight,
-    .dashboard-section.visible .ai-loading {
-        opacity: 1; transform: translateY(0); transition-delay: 0.28s;
-    }
-    .dashboard-section [data-testid="stExpander"],
-    .dashboard-section .stPlotlyChart {
-        opacity: 0; transform: translateY(15px);
-        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.32s,
-                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.32s;
-    }
-    .dashboard-section.visible [data-testid="stExpander"],
-    .dashboard-section.visible .stPlotlyChart {
-        opacity: 1; transform: translateY(0);
-    }
 
-    /* Progress dot nav — fixed right side */
-    .scroll-progress-nav {
+    /* Progress dot nav */
+    .scroll-nav {
         position: fixed; right: 18px; top: 50%; transform: translateY(-50%);
         z-index: 100; display: flex; flex-direction: column; gap: 10px;
         padding: 8px 4px; opacity: 0; transition: opacity 0.4s ease;
     }
-    .scroll-progress-nav.show { opacity: 1; }
-    .scroll-progress-nav .dot {
+    .scroll-nav.show { opacity: 1; }
+    .scroll-nav .nav-dot {
         width: 6px; height: 6px; border-radius: 50%;
         background: rgba(155, 114, 207, 0.25);
-        transition: background 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+        transition: background 0.3s ease, transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         cursor: pointer;
     }
-    .scroll-progress-nav .dot.active {
-        background: #9B72CF; transform: scale(1.6);
-        box-shadow: 0 0 8px rgba(155, 114, 207, 0.5);
+    .scroll-nav .nav-dot.active {
+        background: #9B72CF; transform: scale(1.35);
     }
-    .scroll-progress-nav .dot:hover {
-        background: rgba(155, 114, 207, 0.6); transform: scale(1.4);
+    .scroll-nav .nav-dot:hover {
+        background: rgba(155, 114, 207, 0.5); transform: scale(1.25);
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+        .scroll-section { transition: none; opacity: 1; transform: none; }
+        .scroll-section .section-header,
+        .scroll-section .section-row,
+        .scroll-section .section-image,
+        .scroll-section .section-summary,
+        .scroll-section .section-content,
+        .scroll-section .ai-insight,
+        .scroll-section .ai-loading { transition: none; opacity: 1; transform: none; }
     }
 
     /* Hero top area — generous breathing room */
@@ -420,9 +382,8 @@ st.markdown("""
     .section-image img {
         width: 100%; height: 100%; object-fit: cover; display: block;
         opacity: 0.55; filter: saturate(0.7);
-        transition: opacity 0.3s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-        will-change: transform;
-        transform: translateY(0px) scale(1.05);
+        transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        transform: translateY(0px) scale(1.03);
     }
     .section-image:hover img { opacity: 0.75; }
     .section-content { flex: 1; min-width: 0; }
@@ -654,148 +615,120 @@ st.markdown("""
         .loading-steps, .loading-bar-wrap { width: 260px; }
         .section-row { flex-direction: column; }
         .section-image { width: 100%; aspect-ratio: 3 / 1; }
-        .dashboard-section { padding: 1.5rem 0; transform: none !important; filter: none !important; }
-        .dashboard-section.visible { transform: none !important; filter: none !important; }
-        .dashboard-section.fading-out { transform: none !important; filter: none !important; }
-        .dashboard-section .section-header,
-        .dashboard-section .section-row,
-        .dashboard-section .section-image,
-        .dashboard-section .section-summary,
-        .dashboard-section .section-content,
-        .dashboard-section .ai-insight,
-        .dashboard-section .ai-loading,
-        .dashboard-section [data-testid="stExpander"],
-        .dashboard-section .stPlotlyChart { transition-delay: 0s !important; }
-        .scroll-progress-nav { display: none; }
-        .main .block-container::before,
-        .main .block-container::after { display: none; }
+        .scroll-section { padding: 1.5rem 0; }
+        .scroll-section .section-header,
+        .scroll-section .section-row,
+        .scroll-section .section-image,
+        .scroll-section .section-summary,
+        .scroll-section .section-content,
+        .scroll-section .ai-insight,
+        .scroll-section .ai-loading { transition-delay: 0s !important; }
+        .scroll-nav { display: none; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Inject premium scroll engine: blur reveal, stagger, parallax, dot nav
-st.markdown("""
+# Inject scroll engine via st.html (st.markdown strips <script> tags)
+st.html("""
 <script>
 (function() {
     'use strict';
+    const doc = window.parent.document;
 
-    // Progress dot navigation
-    const nav = document.createElement('div');
-    nav.className = 'scroll-progress-nav';
-    document.body.appendChild(nav);
+    // Dot nav
+    if (doc.querySelector('.scroll-nav')) return; // already injected
+    const nav = doc.createElement('div');
+    nav.className = 'scroll-nav';
+    doc.body.appendChild(nav);
 
-    const visibleSections = new Set();
-    let activeSectionIndex = -1;
-
-    function buildThresholds(steps) {
-        const t = [];
-        for (let i = 0; i <= steps; i++) t.push(i / steps);
-        return t;
-    }
-
-    const fadeObserver = new IntersectionObserver((entries) => {
+    // Observe scroll-section containers (found via marker spans)
+    const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            const el = entry.target;
             if (entry.isIntersecting) {
-                el.classList.remove('fading-out');
-                el.classList.add('visible');
-                visibleSections.add(el);
-            } else if (el.classList.contains('visible')) {
-                el.classList.remove('visible');
-                visibleSections.delete(el);
-                if (entry.boundingClientRect.top < 0) {
-                    el.classList.add('fading-out');
-                } else {
-                    el.classList.remove('fading-out');
-                }
+                entry.target.classList.add('revealed');
+                observer.unobserve(entry.target);
             }
         });
-        updateActiveSection();
-    }, {
-        threshold: buildThresholds(20),
-        rootMargin: '0px 0px -80px 0px'
-    });
+        updateNav();
+    }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
 
-    function updateActiveSection() {
-        const sections = Array.from(document.querySelectorAll('.dashboard-section.observed'));
-        const vh = window.innerHeight;
+    // Active section tracking for dot nav
+    let activeDot = -1;
+    function updateNav() {
+        const sections = doc.querySelectorAll('.scroll-section');
+        const vh = window.parent.innerHeight;
         let bestIdx = -1, bestDist = Infinity;
         sections.forEach((s, i) => {
-            s.classList.remove('active');
-            if (!visibleSections.has(s)) return;
             const rect = s.getBoundingClientRect();
             const dist = Math.abs(rect.top + rect.height / 2 - vh * 0.45);
-            if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+            if (rect.top < vh && rect.bottom > 0 && dist < bestDist) {
+                bestDist = dist; bestIdx = i;
+            }
         });
-        if (bestIdx >= 0 && bestIdx !== activeSectionIndex) {
-            activeSectionIndex = bestIdx;
-            sections[bestIdx].classList.add('active');
-            nav.querySelectorAll('.dot').forEach((d, i) => {
+        if (bestIdx !== activeDot) {
+            activeDot = bestIdx;
+            nav.querySelectorAll('.nav-dot').forEach((d, i) => {
                 d.classList.toggle('active', i === bestIdx);
             });
         }
     }
 
-    // Multi-layer parallax
+    // Subtle image parallax only (single layer, 12px)
     let ticking = false;
     function updateParallax() {
-        const vh = window.innerHeight;
-        document.querySelectorAll('.dashboard-section.visible .section-image img').forEach(img => {
+        const vh = window.parent.innerHeight;
+        doc.querySelectorAll('.scroll-section.revealed .section-image img').forEach(img => {
             const rect = img.getBoundingClientRect();
             const ratio = Math.max(-1, Math.min(1, (rect.top + rect.height/2 - vh/2) / (vh/2)));
-            img.style.transform = 'translateY(' + (ratio * 25) + 'px) scale(1.05)';
-        });
-        document.querySelectorAll('.dashboard-section.visible .section-header').forEach(hdr => {
-            const rect = hdr.getBoundingClientRect();
-            const ratio = Math.max(-1, Math.min(1, (rect.top - vh/2) / (vh/2)));
-            hdr.style.transform = 'translateY(' + (ratio * -6) + 'px)';
-        });
-        document.querySelectorAll('.dashboard-section.visible .ai-insight').forEach(box => {
-            const rect = box.getBoundingClientRect();
-            const ratio = Math.max(-1, Math.min(1, (rect.top + rect.height/2 - vh/2) / (vh/2)));
-            box.style.transform = 'translateY(' + (ratio * 10) + 'px)';
+            img.style.transform = 'translateY(' + (ratio * 12) + 'px) scale(1.03)';
         });
         ticking = false;
     }
-    window.addEventListener('scroll', function() {
+    window.parent.addEventListener('scroll', function() {
         if (!ticking) { ticking = true; requestAnimationFrame(updateParallax); }
+        updateNav();
     }, { passive: true });
 
-    // Dot nav visibility
-    let navVisible = false;
-    window.addEventListener('scroll', function() {
-        const shouldShow = window.scrollY > 300;
-        if (shouldShow !== navVisible) {
-            navVisible = shouldShow;
-            nav.classList.toggle('show', shouldShow);
-        }
-    }, { passive: true });
-
-    // Observe sections + build dot nav
-    function observeSections() {
-        document.querySelectorAll('.dashboard-section:not(.observed)').forEach(el => {
-            el.classList.add('observed');
-            fadeObserver.observe(el);
+    // Find marker spans, apply scroll-section class to their nearest stVerticalBlock parent
+    let lastCount = 0;
+    function scan() {
+        doc.querySelectorAll('.scroll-section-marker').forEach(marker => {
+            // Walk up to find the st.container's vertical block wrapper
+            let el = marker.closest('[data-testid="stVerticalBlock"]');
+            if (!el) el = marker.parentElement;
+            // Walk one more level up to get the container wrapper (not the inner block)
+            if (el && el.parentElement && el.parentElement.getAttribute('data-testid') !== 'stAppViewBlockContainer') {
+                el = el.parentElement;
+            }
+            if (el && !el.classList.contains('scroll-section')) {
+                el.classList.add('scroll-section');
+            }
         });
-        const allSections = document.querySelectorAll('.dashboard-section.observed');
-        if (allSections.length !== nav.children.length) {
+        doc.querySelectorAll('.scroll-section:not(.scroll-observed)').forEach(el => {
+            el.classList.add('scroll-observed');
+            observer.observe(el);
+        });
+        const all = doc.querySelectorAll('.scroll-section');
+        if (all.length !== lastCount) {
+            lastCount = all.length;
             nav.innerHTML = '';
-            allSections.forEach((section) => {
-                const dot = document.createElement('div');
-                dot.className = 'dot';
+            all.forEach((section) => {
+                const dot = doc.createElement('div');
+                dot.className = 'nav-dot';
                 dot.addEventListener('click', () => {
                     section.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 });
                 nav.appendChild(dot);
             });
         }
+        const shouldShow = window.parent.scrollY > 300;
+        nav.classList.toggle('show', shouldShow);
     }
-    observeSections();
-    new MutationObserver(observeSections).observe(document.body, { childList: true, subtree: true });
-    requestAnimationFrame(updateParallax);
+    scan();
+    new MutationObserver(() => requestAnimationFrame(scan)).observe(doc.body, { childList: true, subtree: true });
 })();
 </script>
-""", unsafe_allow_html=True)
+""", unsafe_allow_javascript=True)
 
 
 # ---------------------------------------------------------------------------
@@ -2420,15 +2353,12 @@ def main():
     # =====================================================================
     # AI NARRATIVE — first section after metrics
     # =====================================================================
-    st.markdown('<div class="dashboard-section">', unsafe_allow_html=True)
-    # "What Matters Now" — pre-generated during loading phase
-    if matters_result:
-        st.markdown(ai_box("What Matters Right Now", matters_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
-
-    # Deep dive — pre-generated during loading phase
-    if dd_result:
-        st.markdown(ai_box("The Full Story", dd_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<span class="scroll-section-marker"></span>', unsafe_allow_html=True)
+        if matters_result:
+            st.markdown(ai_box("What Matters Right Now", matters_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
+        if dd_result:
+            st.markdown(ai_box("The Full Story", dd_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
 
     # =====================================================================
     # DYNAMIC SECTION RENDERING — ordered by importance
@@ -2443,43 +2373,42 @@ def main():
         "quarterly": "Cross-Source",
     }
 
-    # Each section wrapped in dashboard-section for scroll-triggered animation
-    total_sections = len(section_order)
+    # Each section in its own st.container with a marker for JS scroll detection
     for idx, section_key in enumerate(section_order):
-        st.markdown('<div class="dashboard-section">', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<span class="scroll-section-marker"></span>', unsafe_allow_html=True)
 
-        if section_key == "trend":
-            time_range = render_trend(sa_weekly, _ctx, c_now, yoy, wow, sa_weekly["date"].max())
+            if section_key == "trend":
+                time_range = render_trend(sa_weekly, _ctx, c_now, yoy, wow, sa_weekly["date"].max())
 
-        elif section_key == "divergence":
-            render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_year)
+            elif section_key == "divergence":
+                render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_year)
 
-        elif section_key == "channels":
-            render_channels(hx_trends, extra_trends, _ctx, comp_df)
-            render_channel_table(yoy, extra_trends, hx_trends)
+            elif section_key == "channels":
+                render_channels(hx_trends, extra_trends, _ctx, comp_df)
+                render_channel_table(yoy, extra_trends, hx_trends)
 
-        elif section_key == "competitors":
-            comp_df = render_competitors(extra_trends, _ctx)
+            elif section_key == "competitors":
+                comp_df = render_competitors(extra_trends, _ctx)
 
-        elif section_key == "news":
-            render_news(pre_result=news_result)
+            elif section_key == "news":
+                render_news(pre_result=news_result)
 
-        elif section_key == "seasonal":
-            render_seasonal(weekly, latest_date, _ctx, yoy)
+            elif section_key == "seasonal":
+                render_seasonal(weekly, latest_date, _ctx, yoy)
 
-        elif section_key == "yoy":
-            render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy)
+            elif section_key == "yoy":
+                render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy)
 
-        elif section_key == "quarterly":
-            render_quarterly(quarterly, time_range, sa_weekly["date"].max(), _ctx)
-
-        st.markdown('</div>', unsafe_allow_html=True)
+            elif section_key == "quarterly":
+                render_quarterly(quarterly, time_range, sa_weekly["date"].max(), _ctx)
 
     # =====================================================================
     # INDIVIDUAL SIGNALS & METHODOLOGY (always last)
     # =====================================================================
-    st.markdown('<div class="dashboard-section">', unsafe_allow_html=True)
-    render_signals(sources)
+    with st.container():
+        st.markdown('<span class="scroll-section-marker"></span>', unsafe_allow_html=True)
+        render_signals(sources)
 
     with st.expander("How this dashboard works"):
         st.markdown(f"""<div class="methodology">
@@ -2526,7 +2455,7 @@ def main():
         st.session_state.pop("data_loaded", None)
         st.rerun()
 
-    st.markdown('</div>', unsafe_allow_html=True)  # close last dashboard-section
+    # (sections are now wrapped in st.container, no manual div close needed)
 
 
 if __name__ == "__main__":
