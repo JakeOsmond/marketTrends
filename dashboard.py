@@ -113,50 +113,108 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #1A1528; }
     .block-container { padding-top: 1.5rem; padding-bottom: 1rem; }
 
-    /* Scroll section markers — hidden, used by JS to find sections */
+    /* Scroll section markers */
     .scroll-section-marker { display: none; }
 
-    /* === SCROLL REVEAL — clean, one-shot fade + rise === */
-    .scroll-section {
-        opacity: 0;
-        transform: translateY(24px);
-        transition: opacity 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                    transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        padding: 2.5rem 0;
-        margin: 0.5rem 0;
-        border-bottom: 1px solid rgba(45, 36, 69, 0.3);
+    /* === SCROLL-DRIVEN ANIMATIONS (Chrome/Edge 115+, Safari 18+) === */
+    @keyframes scroll-reveal {
+        0%   { opacity: 0.1; transform: scale(0.6) translateY(40px); filter: blur(8px); }
+        35%  { opacity: 1;   transform: scale(1) translateY(0);      filter: blur(0px); }
+        65%  { opacity: 1;   transform: scale(1) translateY(0);      filter: blur(0px); }
+        100% { opacity: 0.1; transform: scale(0.6) translateY(-40px); filter: blur(8px); }
     }
-    .scroll-section:last-child { border-bottom: none; }
-    .scroll-section.revealed {
-        opacity: 1;
-        transform: translateY(0);
+    @keyframes scroll-child {
+        0%   { opacity: 0; transform: translateY(25px); filter: blur(3px); }
+        30%  { opacity: 1; transform: translateY(0);    filter: blur(0px); }
+        70%  { opacity: 1; transform: translateY(0);    filter: blur(0px); }
+        100% { opacity: 0; transform: translateY(-25px); filter: blur(3px); }
     }
 
-    /* 3-tier stagger: header → body → supplemental */
-    .scroll-section .section-header,
-    .scroll-section .section-row,
-    .scroll-section .section-image,
-    .scroll-section .section-summary,
-    .scroll-section .section-content,
-    .scroll-section .ai-insight,
-    .scroll-section .ai-loading {
-        opacity: 0;
-        transform: translateY(16px);
-        transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                    transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    @supports (animation-timeline: view()) {
+        .scroll-section {
+            animation: scroll-reveal linear both;
+            animation-timeline: view();
+            animation-range: entry 0% exit 100%;
+            padding: 2.5rem 0; margin: 0.5rem 0;
+            border-bottom: 1px solid rgba(45, 36, 69, 0.3);
+            will-change: transform, opacity, filter;
+            transform-origin: center center;
+        }
+        .scroll-section:last-child { border-bottom: none; }
+        .scroll-section .section-header {
+            animation: scroll-child linear both;
+            animation-timeline: view();
+            animation-range: entry 5% exit 95%;
+        }
+        .scroll-section .section-row,
+        .scroll-section .section-image,
+        .scroll-section .section-summary,
+        .scroll-section .section-content {
+            animation: scroll-child linear both;
+            animation-timeline: view();
+            animation-range: entry 8% exit 92%;
+        }
+        .scroll-section .ai-insight,
+        .scroll-section .ai-loading {
+            animation: scroll-child linear both;
+            animation-timeline: view();
+            animation-range: entry 12% exit 88%;
+        }
+        /* Disable old transition system when scroll-driven is active */
+        .scroll-section,
+        .scroll-section .section-header,
+        .scroll-section .section-row,
+        .scroll-section .section-image,
+        .scroll-section .section-summary,
+        .scroll-section .section-content,
+        .scroll-section .ai-insight,
+        .scroll-section .ai-loading { transition: none !important; }
     }
-    .scroll-section.revealed .section-header {
-        opacity: 1; transform: translateY(0); transition-delay: 0s;
+
+    /* Fallback for browsers without scroll-driven animations (Firefox) */
+    @supports not (animation-timeline: view()) {
+        .scroll-section {
+            opacity: 0; transform: translateY(24px);
+            transition: opacity 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                        transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            padding: 2.5rem 0; margin: 0.5rem 0;
+            border-bottom: 1px solid rgba(45, 36, 69, 0.3);
+        }
+        .scroll-section:last-child { border-bottom: none; }
+        .scroll-section.revealed { opacity: 1; transform: translateY(0); }
+        .scroll-section .section-header,
+        .scroll-section .section-row,
+        .scroll-section .section-image,
+        .scroll-section .section-summary,
+        .scroll-section .section-content,
+        .scroll-section .ai-insight,
+        .scroll-section .ai-loading {
+            opacity: 0; transform: translateY(16px);
+            transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                        transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .scroll-section.revealed .section-header { opacity: 1; transform: translateY(0); }
+        .scroll-section.revealed .section-row,
+        .scroll-section.revealed .section-image,
+        .scroll-section.revealed .section-summary,
+        .scroll-section.revealed .section-content { opacity: 1; transform: translateY(0); transition-delay: 0.06s; }
+        .scroll-section.revealed .ai-insight,
+        .scroll-section.revealed .ai-loading { opacity: 1; transform: translateY(0); transition-delay: 0.12s; }
     }
-    .scroll-section.revealed .section-row,
-    .scroll-section.revealed .section-image,
-    .scroll-section.revealed .section-summary,
-    .scroll-section.revealed .section-content {
-        opacity: 1; transform: translateY(0); transition-delay: 0.06s;
+
+    /* Edge blur vignette — content fades into darkness at screen edges */
+    .stApp::before,
+    .stApp::after {
+        content: ''; position: fixed; left: 0; right: 0; height: 120px;
+        z-index: 90; pointer-events: none;
     }
-    .scroll-section.revealed .ai-insight,
-    .scroll-section.revealed .ai-loading {
-        opacity: 1; transform: translateY(0); transition-delay: 0.12s;
+    .stApp::before {
+        top: 0;
+        background: linear-gradient(to bottom, rgba(15,11,24,0.95) 0%, rgba(15,11,24,0.6) 40%, transparent 100%);
+    }
+    .stApp::after {
+        bottom: 0;
+        background: linear-gradient(to top, rgba(15,11,24,0.95) 0%, rgba(15,11,24,0.6) 40%, transparent 100%);
     }
 
     /* Progress dot nav */
@@ -169,26 +227,19 @@ st.markdown("""
     .scroll-nav .nav-dot {
         width: 6px; height: 6px; border-radius: 50%;
         background: rgba(155, 114, 207, 0.25);
-        transition: background 0.3s ease, transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        cursor: pointer;
+        transition: background 0.3s ease, transform 0.3s ease; cursor: pointer;
     }
-    .scroll-nav .nav-dot.active {
-        background: #9B72CF; transform: scale(1.35);
-    }
-    .scroll-nav .nav-dot:hover {
-        background: rgba(155, 114, 207, 0.5); transform: scale(1.25);
-    }
+    .scroll-nav .nav-dot.active { background: #9B72CF; transform: scale(1.35); }
+    .scroll-nav .nav-dot:hover { background: rgba(155, 114, 207, 0.5); transform: scale(1.25); }
 
     /* Reduced motion */
     @media (prefers-reduced-motion: reduce) {
-        .scroll-section { transition: none; opacity: 1; transform: none; }
-        .scroll-section .section-header,
-        .scroll-section .section-row,
-        .scroll-section .section-image,
-        .scroll-section .section-summary,
-        .scroll-section .section-content,
-        .scroll-section .ai-insight,
-        .scroll-section .ai-loading { transition: none; opacity: 1; transform: none; }
+        .scroll-section { animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
+        .scroll-section .section-header, .scroll-section .section-row,
+        .scroll-section .section-image, .scroll-section .section-summary,
+        .scroll-section .section-content, .scroll-section .ai-insight,
+        .scroll-section .ai-loading { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
+        .stApp::before, .stApp::after { display: none; }
     }
 
     /* Hero top area — generous breathing room */
@@ -382,8 +433,7 @@ st.markdown("""
     .section-image img {
         width: 100%; height: 100%; object-fit: cover; display: block;
         opacity: 0.55; filter: saturate(0.7);
-        transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        transform: translateY(0px) scale(1.03);
+        transition: opacity 0.3s ease;
     }
     .section-image:hover img { opacity: 0.75; }
     .section-content { flex: 1; min-width: 0; }
@@ -624,39 +674,42 @@ st.markdown("""
         .scroll-section .ai-insight,
         .scroll-section .ai-loading { transition-delay: 0s !important; }
         .scroll-nav { display: none; }
+        .stApp::before, .stApp::after { height: 80px; }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Inject scroll engine via st.html (st.markdown strips <script> tags)
+# st.html in Streamlit 1.55+ is NOT iframed — direct document access
 st.html("""
 <script>
 (function() {
     'use strict';
-    const doc = window.parent.document;
+    // st.html is inline in Streamlit 1.55+ — use document directly
+    const doc = document;
+    const useNativeScroll = CSS.supports('animation-timeline: view()');
 
     // Dot nav
-    if (doc.querySelector('.scroll-nav')) return; // already injected
+    if (doc.querySelector('.scroll-nav')) return;
     const nav = doc.createElement('div');
     nav.className = 'scroll-nav';
     doc.body.appendChild(nav);
 
-    // Observe scroll-section containers (found via marker spans)
+    // Observer for fallback (adds .revealed class for browsers without scroll-driven CSS)
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('revealed');
-                observer.unobserve(entry.target);
+                if (!useNativeScroll) observer.unobserve(entry.target);
             }
         });
-        updateNav();
     }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
 
     // Active section tracking for dot nav
     let activeDot = -1;
     function updateNav() {
         const sections = doc.querySelectorAll('.scroll-section');
-        const vh = window.parent.innerHeight;
+        const vh = window.innerHeight;
         let bestIdx = -1, bestDist = Infinity;
         sections.forEach((s, i) => {
             const rect = s.getBoundingClientRect();
@@ -672,32 +725,16 @@ st.html("""
             });
         }
     }
+    window.addEventListener('scroll', updateNav, { passive: true });
 
-    // Subtle image parallax only (single layer, 12px)
-    let ticking = false;
-    function updateParallax() {
-        const vh = window.parent.innerHeight;
-        doc.querySelectorAll('.scroll-section.revealed .section-image img').forEach(img => {
-            const rect = img.getBoundingClientRect();
-            const ratio = Math.max(-1, Math.min(1, (rect.top + rect.height/2 - vh/2) / (vh/2)));
-            img.style.transform = 'translateY(' + (ratio * 12) + 'px) scale(1.03)';
-        });
-        ticking = false;
-    }
-    window.parent.addEventListener('scroll', function() {
-        if (!ticking) { ticking = true; requestAnimationFrame(updateParallax); }
-        updateNav();
-    }, { passive: true });
-
-    // Find marker spans, apply scroll-section class to their nearest stVerticalBlock parent
+    // Find markers, apply scroll-section class to parent container
     let lastCount = 0;
     function scan() {
         doc.querySelectorAll('.scroll-section-marker').forEach(marker => {
-            // Walk up to find the st.container's vertical block wrapper
-            let el = marker.closest('[data-testid="stVerticalBlock"]');
-            if (!el) el = marker.parentElement;
-            // Walk one more level up to get the container wrapper (not the inner block)
-            if (el && el.parentElement && el.parentElement.getAttribute('data-testid') !== 'stAppViewBlockContainer') {
+            let el = marker.closest('[data-testid="stVerticalBlockBorderWrapper"]')
+                  || marker.closest('[data-testid="stVerticalBlock"]');
+            if (el && el.parentElement &&
+                !el.parentElement.matches('[data-testid="stAppViewBlockContainer"]')) {
                 el = el.parentElement;
             }
             if (el && !el.classList.contains('scroll-section')) {
@@ -712,7 +749,7 @@ st.html("""
         if (all.length !== lastCount) {
             lastCount = all.length;
             nav.innerHTML = '';
-            all.forEach((section) => {
+            all.forEach(section => {
                 const dot = doc.createElement('div');
                 dot.className = 'nav-dot';
                 dot.addEventListener('click', () => {
@@ -721,11 +758,14 @@ st.html("""
                 nav.appendChild(dot);
             });
         }
-        const shouldShow = window.parent.scrollY > 300;
-        nav.classList.toggle('show', shouldShow);
+        nav.classList.toggle('show', window.scrollY > 300);
     }
     scan();
-    new MutationObserver(() => requestAnimationFrame(scan)).observe(doc.body, { childList: true, subtree: true });
+    let scanTimer;
+    new MutationObserver(() => {
+        clearTimeout(scanTimer);
+        scanTimer = setTimeout(scan, 100);
+    }).observe(doc.body, { childList: true, subtree: true });
 })();
 </script>
 """, unsafe_allow_javascript=True)
@@ -2354,7 +2394,7 @@ def main():
     # AI NARRATIVE — first section after metrics
     # =====================================================================
     with st.container():
-        st.markdown('<span class="scroll-section-marker"></span>', unsafe_allow_html=True)
+        st.markdown('<span class="scroll-section-marker">&nbsp;</span>', unsafe_allow_html=True)
         if matters_result:
             st.markdown(ai_box("What Matters Right Now", matters_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
         if dd_result:
@@ -2376,7 +2416,7 @@ def main():
     # Each section in its own st.container with a marker for JS scroll detection
     for idx, section_key in enumerate(section_order):
         with st.container():
-            st.markdown('<span class="scroll-section-marker"></span>', unsafe_allow_html=True)
+            st.markdown('<span class="scroll-section-marker">&nbsp;</span>', unsafe_allow_html=True)
 
             if section_key == "trend":
                 time_range = render_trend(sa_weekly, _ctx, c_now, yoy, wow, sa_weekly["date"].max())
@@ -2407,7 +2447,7 @@ def main():
     # INDIVIDUAL SIGNALS & METHODOLOGY (always last)
     # =====================================================================
     with st.container():
-        st.markdown('<span class="scroll-section-marker"></span>', unsafe_allow_html=True)
+        st.markdown('<span class="scroll-section-marker">&nbsp;</span>', unsafe_allow_html=True)
         render_signals(sources)
 
     with st.expander("How this dashboard works"):
