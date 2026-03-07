@@ -6,6 +6,7 @@ Run with: python3 -m streamlit run dashboard.py
 
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -112,20 +113,27 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #1A1528; }
     .block-container { padding-top: 1.5rem; padding-bottom: 1rem; }
 
-    /* Scroll-triggered section animations */
+    /* Scroll-triggered section animations — fade in AND out */
     .dashboard-section {
         opacity: 0;
-        transform: translateY(32px);
-        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateY(40px) scale(0.985);
+        transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
         padding: 2.5rem 0;
         margin: 0.5rem 0;
         border-bottom: 1px solid rgba(45, 36, 69, 0.3);
+        will-change: opacity, transform;
     }
     .dashboard-section:last-child { border-bottom: none; }
     .dashboard-section.visible {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
+    }
+    .dashboard-section.fading-out {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.985);
+        transition: opacity 0.5s cubic-bezier(0.4, 0, 1, 1),
+                    transform 0.5s cubic-bezier(0.4, 0, 1, 1);
     }
 
     /* Hero top area — generous breathing room */
@@ -319,7 +327,9 @@ st.markdown("""
     .section-image img {
         width: 100%; height: 100%; object-fit: cover; display: block;
         opacity: 0.55; filter: saturate(0.7);
-        transition: opacity 0.3s ease;
+        transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        will-change: transform;
+        transform: translateY(0px);
     }
     .section-image:hover img { opacity: 0.75; }
     .section-content { flex: 1; min-width: 0; }
@@ -343,6 +353,49 @@ st.markdown("""
         text-align: center; color: #9AA3B5; font-size: 0.85rem; padding-top: 0.5rem;
         animation: pulse-glow 1.5s ease-in-out infinite;
     }
+
+    /* AI loading skeleton */
+    @keyframes ai-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+    @keyframes ai-dot-pulse {
+        0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+        40% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes ai-label-pulse {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 1; }
+    }
+    .ai-loading {
+        background: #140F20;
+        border-left: 4px solid #542E91;
+        border-radius: 0 10px 10px 0;
+        padding: 1.25rem 1.5rem;
+        margin: 1.25rem 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .ai-loading .ai-loading-label {
+        font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.1em; margin-bottom: 0.75rem;
+        display: flex; align-items: center; gap: 0.5rem;
+        color: #9B72CF; animation: ai-label-pulse 2s ease-in-out infinite;
+    }
+    .ai-loading .ai-loading-dots { display: flex; gap: 4px; align-items: center; }
+    .ai-loading .ai-loading-dots span {
+        width: 6px; height: 6px; border-radius: 50%; background: #9B72CF;
+        display: inline-block; animation: ai-dot-pulse 1.4s ease-in-out infinite;
+    }
+    .ai-loading .ai-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .ai-loading .ai-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    .ai-loading .ai-shimmer-line {
+        height: 12px; border-radius: 6px; margin-bottom: 0.6rem;
+        background: linear-gradient(90deg, #1A1528 25%, #2D2445 37%, #3D2F5A 50%, #2D2445 63%, #1A1528 75%);
+        background-size: 400% 100%; animation: ai-shimmer 1.8s ease-in-out infinite;
+    }
+    .ai-loading .ai-shimmer-line:nth-child(1) { width: 92%; }
+    .ai-loading .ai-shimmer-line:nth-child(2) { width: 78%; animation-delay: 0.15s; }
+    .ai-loading .ai-shimmer-line:nth-child(3) { width: 65%; animation-delay: 0.3s; margin-bottom: 0; }
 
     /* Loading screen */
     @keyframes pulse-glow {
@@ -508,32 +561,61 @@ st.markdown("""
         .loading-steps, .loading-bar-wrap { width: 260px; }
         .section-row { flex-direction: column; }
         .section-image { width: 100%; aspect-ratio: 3 / 1; }
-        .dashboard-section { padding: 1.5rem 0; }
+        .dashboard-section { padding: 1.5rem 0; transform: none !important; }
+        .dashboard-section.visible { transform: none !important; }
+        .dashboard-section.fading-out { transform: none !important; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Inject Intersection Observer for scroll-triggered section animations
+# Inject scroll animations: fade in/out + parallax
 st.markdown("""
 <script>
-    // Observe .dashboard-section elements and add .visible when they scroll into view
-    const observer = new IntersectionObserver((entries) => {
+(function() {
+    const fadeObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
+            const el = entry.target;
             if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
+                el.classList.remove('fading-out');
+                el.classList.add('visible');
+            } else if (el.classList.contains('visible')) {
+                el.classList.remove('visible');
+                if (entry.boundingClientRect.top < 0) {
+                    el.classList.add('fading-out');
+                } else {
+                    el.classList.remove('fading-out');
+                }
             }
         });
-    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+    }, {
+        threshold: [0, 0.05, 0.1, 0.2, 0.3],
+        rootMargin: '0px 0px -60px 0px'
+    });
 
-    // Re-run observer whenever Streamlit re-renders (MutationObserver on body)
+    let ticking = false;
+    function updateParallax() {
+        const images = document.querySelectorAll('.dashboard-section.visible .section-image img');
+        const vh = window.innerHeight;
+        images.forEach(img => {
+            const rect = img.getBoundingClientRect();
+            const ratio = Math.max(-1, Math.min(1, (rect.top + rect.height/2 - vh/2) / (vh/2)));
+            img.style.transform = 'translateY(' + (ratio * 20) + 'px)';
+        });
+        ticking = false;
+    }
+    window.addEventListener('scroll', function() {
+        if (!ticking) { ticking = true; requestAnimationFrame(updateParallax); }
+    }, { passive: true });
+
     function observeSections() {
         document.querySelectorAll('.dashboard-section:not(.observed)').forEach(el => {
             el.classList.add('observed');
-            observer.observe(el);
+            fadeObserver.observe(el);
         });
     }
     observeSections();
     new MutationObserver(observeSections).observe(document.body, { childList: true, subtree: true });
+})();
 </script>
 """, unsafe_allow_html=True)
 
@@ -748,14 +830,13 @@ ANALYST_PROMPT = f"""You brief the Holiday Extras insurance team. They're busy. 
 {HX_STRATEGY_CONTEXT}
 
 RULES:
-- Lead with the ONE thing that matters most. Bold it.
-- Plain English only. No jargon. No "index", "SA", "normalised", "basis points".
-- Say "up 15% vs last year" — never "index at 115".
-- All data is Google search volume, NOT sales. More searches ≠ more HX customers. Say how to CAPTURE demand, not just report it.
-- Name specifics: airlines, dates, destinations, news events. Vague = useless.
+- Reply in plain English a 12-year-old could understand. Short sentences. No jargon.
+- NEVER use asterisks, markdown formatting, or special symbols. Use <b> tags if you need bold.
+- Never say "index", "SA", "normalised", "basis points". Say "up 15% vs last year".
+- All data is Google search volume, NOT sales. More searches does not mean more HX customers. Say how to CAPTURE demand.
+- Name specifics: airlines, dates, destinations, news events. Vague is useless.
 - End with ONE action: who does what, which channel, by when.
-- MAX 3 sentences. If you can say it in fewer, do. No filler. No preamble.
-- Bold the key facts for skimmers."""
+- MAX 280 characters total. Tweet-length. No filler. No preamble."""
 
 
 _BAD_RESPONSE_MARKERS = [
@@ -982,12 +1063,12 @@ Return ONLY a JSON array of 5 terms, nothing else. Example:
 {HX_STRATEGY_CONTEXT}
 
 RULES:
-- Journalist style. Short punchy sentences. Every sentence must add new information.
-- Bold the key facts. Skimmers should get it in 5 seconds.
+- Reply in plain English a 12-year-old could understand. Short punchy sentences.
+- NEVER use asterisks, markdown formatting, or special symbols. Use <b> tags if you need bold.
 - Name specifics: airlines, destinations, events, dates. No vague statements.
 - Data is Google search volume, NOT sales. Say how HX can capture the opportunity.
 - End with ONE thing to watch or do next week.
-- MAX 3 short sentences. No bullet points. No jargon. No filler."""
+- MAX 400 characters total. No bullet points. No jargon. No filler."""
 
     narrative_input = (
         f"MARKET DATA:\n{context}\n\n"
@@ -1094,13 +1175,44 @@ CHART_LAYOUT = dict(
 )
 
 
+def _strip_markdown(text: str) -> str:
+    """Remove markdown artifacts from AI responses, keeping HTML tags."""
+    if not text:
+        return text
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    text = re.sub(r'\*(.+?)\*', r'<b>\1</b>', text)
+    text = text.replace('*', '')
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+    text = text.replace('`', '')
+    return text.strip()
+
+
 def ai_box(label: str, content: str, color: str = BLUE) -> str:
+    content = _strip_markdown(content)
     return f"""
     <div class="ai-insight" style="border-left-color: {color};" role="region" aria-label="{label}">
         <div class="ai-label" style="color: {color};">
             <span class="dot" style="background: {color};"></span> {label}
         </div>
         <div>{content}</div>
+    </div>"""
+
+
+def ai_loading_box(label: str, color: str = HX_PURPLE_LIGHT) -> str:
+    """Skeleton loader that matches ai_box dimensions."""
+    return f"""
+    <div class="ai-loading" style="border-left-color: {color};">
+        <div class="ai-loading-label" style="color: {color};">
+            <div class="ai-loading-dots">
+                <span style="background: {color};"></span>
+                <span style="background: {color};"></span>
+                <span style="background: {color};"></span>
+            </div>
+            {label}
+        </div>
+        <div class="ai-shimmer-line"></div>
+        <div class="ai-shimmer-line"></div>
+        <div class="ai-shimmer-line"></div>
     </div>"""
 
 
@@ -1439,12 +1551,13 @@ def render_trend(sa_weekly, _ctx, c_now, yoy, wow, max_date):
          f"Currently {yoy:+.1f}% vs last year. "
          f"Growing, shrinking, or flat — and why? One line on what to expect next month. "
          f"One specific action HX should take to capture this demand (not just report it).")
-    with st.spinner("AI analysing market trend..."):
-        ai_result = _call_openai_with_timeout(q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI analysing market trend", HX_PURPLE_LIGHT), unsafe_allow_html=True)
+    ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — What's Driving This", ai_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — What's Driving This", ai_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
     else:
-        st.caption("AI analysis still loading — it will appear on refresh.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", HX_PURPLE_LIGHT), unsafe_allow_html=True)
     return time_range
 
 
@@ -1506,12 +1619,13 @@ def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_ye
          f"Gap has {gap_story} vs last year. "
          f"Why — what real-world event or behaviour shift explains this? "
          f"One specific thing HX should do right now to convert these searchers.")
-    with st.spinner("AI analysing buyer vs dreamer gap..."):
-        ai_result = _call_openai_with_timeout(q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI analysing searchers vs dreamers", TEAL), unsafe_allow_html=True)
+    ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — Insurance Searchers vs Dreamers", ai_result, TEAL), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — Insurance Searchers vs Dreamers", ai_result, TEAL), unsafe_allow_html=True)
     else:
-        st.caption("AI analysis still loading — it will appear on refresh.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", TEAL), unsafe_allow_html=True)
 
 
 def render_channels(hx_trends, extra_trends, _ctx, comp_df):
@@ -1592,12 +1706,13 @@ def render_channels(hx_trends, extra_trends, _ctx, comp_df):
             f"4 channels: Direct (parking cross-sell), PPC/SEO, White Labels (Carnival, Fred Olsen), "
             f"Aggregators (Compare the Market). Which channel has the biggest opportunity right now and why? "
             f"One specific action per channel. Be blunt — skip any channel with nothing noteworthy.")
-    with st.spinner("AI analysing channel opportunities..."):
-        ch_result = _call_openai_with_timeout(ch_q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI analysing channels", HX_PURPLE_LIGHT), unsafe_allow_html=True)
+    ch_result = _call_openai_with_timeout(ch_q, timeout_secs=10)
     if ch_result:
-        st.markdown(ai_box("AI — Channel Opportunities", ch_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — Channel Opportunities", ch_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
     else:
-        st.caption("Channel analysis still loading — refresh in a moment.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", HX_PURPLE_LIGHT), unsafe_allow_html=True)
 
 
 def render_competitors(extra_trends, _ctx):
@@ -1668,20 +1783,26 @@ def render_competitors(extra_trends, _ctx):
     q = (f"DATA:\n{_ctx}\n{comp_context}\n\nWhich competitors are gaining or losing search share? "
          f"Is 'cheap travel insurance' rising? Name names and say what HX should do — "
          f"pricing, ad copy, or product. Skip competitors with no meaningful movement.")
-    with st.spinner("AI analysing competitors..."):
-        ai_result = _call_openai_with_timeout(q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI analysing competitors", ORANGE), unsafe_allow_html=True)
+    ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — Competitor Watch", ai_result, ORANGE), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — Competitor Watch", ai_result, ORANGE), unsafe_allow_html=True)
     else:
-        st.caption("Competitor analysis still loading — it will appear on refresh.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", ORANGE), unsafe_allow_html=True)
 
     return comp_df
 
 
 NEWS_SYSTEM_PROMPT = f"""Search the web for UK travel insurance news from the last 2 weeks. Only include stories that directly affect Holiday Extras.
 {HX_STRATEGY_CONTEXT}
+RULES:
+- Reply in plain English a 12-year-old could understand. No asterisks, no markdown, no special symbols.
+- Use <b> tags for emphasis. NEVER use ** or *.
+- MAX 600 characters total.
+
 FORMAT: Return 3-4 items MAX. Only the most important. For each:
-**[Headline]** — [1 sentence what happened]. **HX action:** [1 sentence what to do].
+<b>[Headline]</b> -- [1 sentence what happened]. <b>HX action:</b> [1 sentence what to do].
 
 Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
 
@@ -1701,12 +1822,13 @@ def render_news(pre_result: str | None = None):
 
     result = pre_result
     if result and not _is_bad_response(result):
+        result = _strip_markdown(result)
         st.markdown(f"""<div class="news-section">
             <div class="news-title">What's Happening Right Now</div>
             <div style="color: #F0F2F6; line-height: 1.8; font-size: 0.95rem;">{result}</div>
         </div>""", unsafe_allow_html=True)
     else:
-        st.caption("News is still loading — it will appear on the next refresh.")
+        st.markdown(ai_loading_box("News still loading — refresh shortly", "#FDDC06"), unsafe_allow_html=True)
 
 
 def render_channel_table(yoy, extra_trends, hx_trends):
@@ -1796,12 +1918,13 @@ def render_seasonal(weekly, latest_date, _ctx, yoy):
     q = (f"DATA:\n{_ctx}\n\nIt's {month}. Market is {yoy:+.1f}% vs last year. "
          f"What happens to travel insurance demand in the next 6-8 weeks? "
          f"Key dates (school holidays, booking windows) and one thing HX should prepare now.")
-    with st.spinner("AI analysing seasonal patterns..."):
-        ai_result = _call_openai_with_timeout(q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI analysing seasonal patterns", ORANGE), unsafe_allow_html=True)
+    ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — What's Coming Next", ai_result, ORANGE), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — What's Coming Next", ai_result, ORANGE), unsafe_allow_html=True)
     else:
-        st.caption("Seasonal analysis still loading — it will appear on refresh.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", ORANGE), unsafe_allow_html=True)
 
 
 def render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i_last_year, yoy):
@@ -1825,12 +1948,13 @@ def render_yoy(sa_weekly, _ctx, c_now, c_last_year, h_now, h_last_year, i_now, i
          f"Holiday searches: {h_yoy:+.0f}%. Insurance searches: {i_yoy:+.0f}%. "
          f"Why — more travellers, or different search behaviour? "
          f"What does this mean for HX sales specifically (not just market size)?")
-    with st.spinner("AI analysing year-on-year changes..."):
-        ai_result = _call_openai_with_timeout(q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI analysing year-on-year", MAGENTA), unsafe_allow_html=True)
+    ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — Year-on-Year Story", ai_result, MAGENTA), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — Year-on-Year Story", ai_result, MAGENTA), unsafe_allow_html=True)
     else:
-        st.caption("Year-on-year analysis still loading — it will appear on refresh.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", MAGENTA), unsafe_allow_html=True)
 
 
 def render_quarterly(quarterly, time_range, max_date, _ctx):
@@ -1849,12 +1973,13 @@ def render_quarterly(quarterly, time_range, max_date, _ctx):
 
     q = (f"DATA:\n{_ctx}\n\n5 data sources checked. Do they agree or conflict? "
          f"Is this a real market shift or noise? One-line confidence verdict for HX decision-makers.")
-    with st.spinner("AI checking data confidence..."):
-        ai_result = _call_openai_with_timeout(q, timeout_secs=10)
+    ai_slot = st.empty()
+    ai_slot.markdown(ai_loading_box("AI checking data confidence", HX_PURPLE_LIGHT), unsafe_allow_html=True)
+    ai_result = _call_openai_with_timeout(q, timeout_secs=10)
     if ai_result:
-        st.markdown(ai_box("AI — Data Confidence Check", ai_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
+        ai_slot.markdown(ai_box("AI — Data Confidence Check", ai_result, HX_PURPLE_LIGHT), unsafe_allow_html=True)
     else:
-        st.caption("Cross-source analysis still loading — it will appear on refresh.")
+        ai_slot.markdown(ai_loading_box("AI still loading — refresh shortly", HX_PURPLE_LIGHT), unsafe_allow_html=True)
 
 
 def render_signals(sources):

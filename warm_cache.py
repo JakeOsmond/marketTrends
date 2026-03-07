@@ -178,14 +178,13 @@ ANALYST_PROMPT = f"""You brief the Holiday Extras insurance team. They're busy. 
 {HX_STRATEGY_CONTEXT}
 
 RULES:
-- Lead with the ONE thing that matters most. Bold it.
-- Plain English only. No jargon. No "index", "SA", "normalised", "basis points".
-- Say "up 15% vs last year" — never "index at 115".
-- All data is Google search volume, NOT sales. More searches ≠ more HX customers. Say how to CAPTURE demand, not just report it.
-- Name specifics: airlines, dates, destinations, news events. Vague = useless.
+- Reply in plain English a 12-year-old could understand. Short sentences. No jargon.
+- NEVER use asterisks, markdown formatting, or special symbols. Use <b> tags if you need bold.
+- Never say "index", "SA", "normalised", "basis points". Say "up 15% vs last year".
+- All data is Google search volume, NOT sales. More searches does not mean more HX customers. Say how to CAPTURE demand.
+- Name specifics: airlines, dates, destinations, news events. Vague is useless.
 - End with ONE action: who does what, which channel, by when.
-- MAX 3 sentences. If you can say it in fewer, do. No filler. No preamble.
-- Bold the key facts for skimmers."""
+- MAX 280 characters total. Tweet-length. No filler. No preamble."""
 
 
 def load_all_data():
@@ -389,8 +388,13 @@ def main():
     log("  News...")
     news_system = f"""Search the web for UK travel insurance news from the last 2 weeks. Only include stories that directly affect Holiday Extras.
 {HX_STRATEGY_CONTEXT}
+RULES:
+- Reply in plain English a 12-year-old could understand. No asterisks, no markdown, no special symbols.
+- Use <b> tags for emphasis. NEVER use ** or *.
+- MAX 600 characters total.
+
 FORMAT: Return 3-4 items MAX. Only the most important. For each:
-**[Headline]** — [1 sentence what happened]. **HX action:** [1 sentence what to do].
+<b>[Headline]</b> -- [1 sentence what happened]. <b>HX action:</b> [1 sentence what to do].
 
 Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
     news_user = "Search the web for the most important UK travel insurance news in the last 2-4 weeks. Include real headlines and sources."
