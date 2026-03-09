@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* === Reset & Base === */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  background: #0F0B18;
+  color: #F0F2F6;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === Container === */
+.container { max-width: 920px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
+
+/* === Brand Bar === */
+.brand-bar {
+  text-align: center;
+  padding: 2rem 0 1.5rem;
+  border-bottom: 1px solid #2D2445;
+  margin-bottom: 2rem;
+}
+.brand-logo {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #9B72CF;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+.brand-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #F0F2F6;
+  line-height: 1.15;
+  margin-bottom: 0.35rem;
+}
+.brand-date {
+  font-size: 0.85rem;
+  color: #9AA3B5;
+}
+
+/* === How It Works (near top) === */
+.how-it-works {
+  background: #1A1528;
+  border: 1px solid #2D2445;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: #B0A8C0;
+}
+.how-it-works strong { color: #F0F2F6; }
+.how-it-works-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #9B72CF;
+  margin-bottom: 0.75rem;
+}
+
+/* === Metric Cards === */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+@media (max-width: 700px) {
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.metric-card {
+  background: #1A1528;
+  border: 1px solid #2D2445;
+  border-radius: 10px;
+  padding: 1.25rem 1.25rem;
+  transition: border-color 0.25s, transform 0.25s;
+}
+.metric-card:hover {
+  border-color: #542E91;
+  transform: translateY(-2px);
+}
+.metric-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #B0A8C0;
+  margin-bottom: 0.5rem;
+}
+.metric-value {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 0.25rem;
+}
+.metric-delta {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.metric-subtitle {
+  font-size: 0.72rem;
+  color: #9AA3B5;
+  margin-top: 0.4rem;
+  line-height: 1.4;
+}
+.up { color: #00B0A6; }
+.down { color: #FF5F68; }
+.neutral { color: #FFB55F; }
+
+/* === Sections === */
+.section {
+  padding: 2rem 0;
+  border-bottom: 1px solid rgba(45,36,69,0.3);
+  animation: sectionReveal 0.6s ease-out both;
+}
+.section:last-child { border-bottom: none; }
+.section-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #9B72CF;
+  margin-bottom: 1rem;
+}
+.section-summary {
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: #F0F2F6;
+  margin-bottom: 1.25rem;
+}
+
+/* === AI Insight Box === */
+.ai-insight {
+  background: #140F20;
+  border-left: 4px solid #542E91;
+  border-radius: 0 10px 10px 0;
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+  font-size: 0.92rem;
+  line-height: 1.75;
+  color: #F0F2F6;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ai-insight.teal { border-left-color: #00B0A6; }
+.ai-insight.orange { border-left-color: #FFB55F; }
+.ai-insight.magenta { border-left-color: #C850C0; }
+.ai-insight-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9AA3B5;
+  margin-bottom: 0.5rem;
+}
+.ai-empty {
+  color: #9AA3B5;
+  font-style: italic;
+  font-size: 0.88rem;
+}
+
+/* === Charts === */
+.chart-container {
+  width: 100%;
+  margin: 1rem 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* === Top Headline === */
+.top-headline {
+  text-align: center;
+  padding: 1.5rem 0 2rem;
+}
+.hl-main {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 0.75rem;
+}
+.hl-sub {
+  font-size: 1rem;
+  color: #B0A8C0;
+  line-height: 1.7;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* === Data Freshness Table === */
+.freshness-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+}
+.freshness-table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: #1A1528;
+  color: #9B72CF;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid #2D2445;
+}
+.freshness-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(45,36,69,0.3);
+  color: #B0A8C0;
+}
+.freshness-table tr:hover td { background: rgba(84,46,145,0.1); }
+
+/* === Animations === */
+@keyframes sectionReveal {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === No Data State === */
+.no-data {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #9AA3B5;
+}
+.no-data h2 { color: #9B72CF; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="no-data">
+    <h2>Loading dashboard...</h2>
+    <p>If this persists, the daily pipeline may not have run yet.</p>
+  </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<script>
+// ======================================================================
+// DATA — injected by Apps Script template engine
+// ======================================================================
+var RAW = <?!= dashboardData ?>;
+var DATA = (typeof RAW === 'string') ? JSON.parse(RAW) : RAW;
+
+// ======================================================================
+// HELPERS
+// ======================================================================
+var COLORS = {
+  purple: '#542E91', purpleLight: '#9B72CF', purpleMed: '#7B52C1',
+  gold: '#FDDC06', blue: '#3AA6FF', teal: '#00B0A6',
+  orange: '#FFB55F', red: '#FF5F68', magenta: '#C850C0',
+  bgPrimary: '#0F0B18', bgCard: '#1A1528',
+  textPrimary: '#F0F2F6', textSecondary: '#B0A8C0', textMuted: '#9AA3B5',
+  border: '#2D2445', grid: '#1E2230'
+};
+
+var CHART_LAYOUT = {
+  paper_bgcolor: COLORS.bgPrimary,
+  plot_bgcolor: COLORS.bgPrimary,
+  font: { family: 'Nunito, system-ui, sans-serif', color: COLORS.textPrimary, size: 12 },
+  margin: { l: 45, r: 10, t: 10, b: 35 },
+  xaxis: { gridcolor: COLORS.grid, showgrid: false, tickfont: { size: 10, color: COLORS.textMuted } },
+  yaxis: { gridcolor: COLORS.grid, gridwidth: 1, tickfont: { size: 10, color: COLORS.textMuted } },
+  hoverlabel: { bgcolor: COLORS.bgCard, bordercolor: 'transparent', font: { family: 'Nunito', size: 13 } },
+  showlegend: true,
+  legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'center', x: 0.5,
+            font: { size: 11, color: COLORS.textSecondary } }
+};
+
+var CHART_CONFIG = { responsive: true, displayModeBar: false };
+
+function metric(key) {
+  var m = DATA.metrics || {};
+  var row = m[key];
+  return row ? parseFloat(row.value) || 0 : 0;
+}
+
+function ai(key) {
+  var a = DATA.aiInsights || {};
+  var row = a[key];
+  return (row && row.insight_text) ? row.insight_text : '';
+}
+
+function fmt(n, decimals) {
+  if (decimals === undefined) decimals = 0;
+  var sign = n > 0 ? '+' : '';
+  return sign + n.toFixed(decimals) + '%';
+}
+
+function escHtml(s) {
+  // Allow <b> tags through
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/&lt;b&gt;/g,'<b>').replace(/&lt;\/b&gt;/g,'</b>');
+}
+
+// ======================================================================
+// BUILD THE DASHBOARD
+// ======================================================================
+function render() {
+  var weekly = DATA.weekly || [];
+  if (weekly.length === 0) return; // keep "loading" message
+
+  var app = document.getElementById('app');
+  var yoy = metric('yoy');
+  var wow = metric('wow');
+  var h_yoy = metric('h_yoy');
+  var i_yoy = metric('i_yoy');
+  var gap = metric('gap');
+  var gap_ly = metric('gap_last_year');
+
+  // Latest date
+  var latestDate = weekly.length > 0 ? weekly[weekly.length - 1].date : '';
+  var dateStr = latestDate ? new Date(latestDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+  // Direction helpers
+  var yoyDir = yoy > 0 ? 'up' : (yoy < 0 ? 'down' : 'neutral');
+  var yoyArrow = yoy > 0 ? '&uarr;' : (yoy < 0 ? '&darr;' : '&rarr;');
+
+  // Headline text
+  var hlMain = 'Insurance searches are ' + (i_yoy > 2 ? '<span class="up">' + fmt(i_yoy) + ' vs last year</span>' :
+               (i_yoy < -2 ? '<span class="down">' + fmt(i_yoy) + ' vs last year</span>' :
+               '<span class="neutral">flat vs last year</span>'));
+
+  var html = '';
+
+  // === Brand Bar ===
+  html += '<div class="brand-bar">';
+  html += '<div class="brand-logo">Holiday Extras</div>';
+  html += '<div class="brand-title">Insurance Market Pulse</div>';
+  html += '<div class="brand-date">Data to ' + dateStr + '</div>';
+  html += '</div>';
+
+  // === How This Dashboard Works (moved near top) ===
+  html += '<div class="how-it-works">';
+  html += '<div class="how-it-works-title">How to read this dashboard</div>';
+  html += '<strong>What is this?</strong> This dashboard shows how busy the UK travel insurance market is, so Holiday Extras can spot opportunities and act on them. It pulls data from 5 different sources and uses AI to explain what is happening and what to do about it.<br><br>';
+  html += '<strong>The numbers account for the time of year</strong> so every change you see reflects something real happening in the market, not just the calendar. <strong>Everything compares to last year</strong> because that is the most useful benchmark.<br><br>';
+  html += '<strong>AI analyses refresh daily</strong> and search the web for real news to explain what is driving the numbers. <strong>Important:</strong> more people searching does not mean more Holiday Extras customers. The dashboard shows the size of the opportunity — it is up to us to capture it.<br><br>';
+  html += '<strong>Data sources:</strong> Google Trends (weekly), UK CAA (annual), ONS (quarterly), Eurostat (monthly), World Bank (annual).';
+  html += '</div>';
+
+  // === Metric Cards ===
+  html += '<div class="metrics-grid">';
+  html += metricCard('MARKET DEMAND', fmt(yoy), yoyArrow + ' vs last year', yoyDir,
+                     'Overall search interest in travel insurance');
+  html += metricCard('INSURANCE SHOPPERS', fmt(i_yoy), (i_yoy > 0 ? '&uarr;' : '&darr;') + ' vs last year',
+                     i_yoy > 0 ? 'up' : 'down', 'Googling travel insurance — closest to buying');
+  html += metricCard('HOLIDAY DREAMERS', fmt(h_yoy), (h_yoy > 0 ? '&uarr;' : '&darr;') + ' vs last year',
+                     h_yoy > 0 ? 'up' : 'down', 'Searching for holidays — they will need insurance soon');
+  var gapLabel = gap > 0 ? 'Insurance leads' : 'Holidays lead';
+  var gapDelta = Math.abs(gap) > Math.abs(gap_ly) + 2 ? 'Gap widened vs last year' : (Math.abs(gap) < Math.abs(gap_ly) - 2 ? 'Gap narrowed vs last year' : 'Gap stable vs last year');
+  html += metricCard('SEARCHING VS DREAMING', gapLabel, gapDelta, gap > 0 ? 'up' : 'down',
+                     'Whether insurance or holiday searches are stronger');
+  html += '</div>';
+
+  // === Top Headline ===
+  html += '<div class="top-headline">';
+  html += '<div class="hl-main">' + hlMain + '</div>';
+  var wmAi = ai('what_matters');
+  if (wmAi) {
+    html += '<div class="hl-sub">' + escHtml(wmAi) + '</div>';
+  }
+  html += '</div>';
+
+  // === Market Demand Trend Chart ===
+  html += sectionStart('Market Demand');
+  html += '<div class="chart-container" id="chart-trend"></div>';
+  html += aiBox('AI — What is driving this', ai('trend'), '');
+  html += sectionEnd();
+
+  // === Insurance Performance (YoY) — PRIMARY KPI ===
+  html += sectionStart('Insurance Performance — Year on Year');
+  html += '<div class="section-summary">Insurance searches are <span class="' + (i_yoy > 0 ? 'up' : 'down') + '">' +
+          fmt(i_yoy) + '</span> vs last year. Holiday searches are <span class="' + (h_yoy > 0 ? 'up' : 'down') + '">' +
+          fmt(h_yoy) + '</span>. Overall market demand is <span class="' + yoyDir + '">' + fmt(yoy) + '</span>.</div>';
+  html += '<div class="chart-container" id="chart-yoy"></div>';
+  html += aiBox('AI — Year on year story', ai('yoy'), 'magenta');
+  html += sectionEnd();
+
+  // === Seasonal Pattern ===
+  html += sectionStart('Seasonal Pattern');
+  html += '<div class="chart-container" id="chart-seasonal"></div>';
+  html += aiBox('AI — What is coming next', ai('seasonal'), 'orange');
+  html += sectionEnd();
+
+  // === News ===
+  var newsText = ai('news');
+  if (newsText) {
+    html += sectionStart('News and Market Intelligence');
+    html += aiBox('Latest news', newsText, 'teal');
+    html += sectionEnd();
+  }
+
+  // === Competitors ===
+  html += sectionStart('Competitors and Price Shopping');
+  html += '<div class="chart-container" id="chart-competitors"></div>';
+  html += aiBox('AI — Competitor watch', ai('competitors'), 'orange');
+  html += sectionEnd();
+
+  // === Channel Signals ===
+  html += sectionStart('Holiday Extras — Channel Signals');
+  html += '<div class="chart-container" id="chart-channels"></div>';
+  html += aiBox('AI — Channel opportunities', ai('channels'), '');
+  html += sectionEnd();
+
+  // === Buyers vs Dreamers (tertiary) ===
+  html += sectionStart('Insurance Searchers vs Holiday Dreamers');
+  html += '<div class="section-summary">The gap between insurance and holiday searches is ' +
+          '<span class="' + (gap > 0 ? 'up' : 'down') + '">' + (gap > 0 ? 'insurance leads by ' + Math.abs(gap).toFixed(0) + ' points' : 'holidays lead by ' + Math.abs(gap).toFixed(0) + ' points') + '</span>. ' +
+          'This is a secondary indicator — insurance volume is the primary measure of market health.</div>';
+  html += '<div class="chart-container" id="chart-divergence"></div>';
+  html += aiBox('AI — Searchers vs dreamers', ai('divergence'), 'teal');
+  html += sectionEnd();
+
+  // === Cross-Source Validation ===
+  html += sectionStart('Cross-Source Validation');
+  html += '<div class="chart-container" id="chart-quarterly"></div>';
+  html += aiBox('AI — Data confidence check', ai('quarterly'), '');
+  html += sectionEnd();
+
+  // === Deep Dive ===
+  var ddText = ai('deep_dive');
+  if (ddText) {
+    html += sectionStart('The Full Story');
+    html += aiBox('AI deep investigation', ddText, 'magenta');
+    html += sectionEnd();
+  }
+
+  // === Data Freshness ===
+  html += sectionStart('Data Freshness');
+  html += buildFreshnessTable();
+  html += sectionEnd();
+
+  app.innerHTML = html;
+
+  // Render all charts
+  setTimeout(function() {
+    renderTrendChart();
+    renderYoYChart();
+    renderSeasonalChart();
+    renderDivergenceChart();
+    renderQuarterlyChart();
+    renderCompetitorChart();
+    renderChannelChart();
+  }, 100);
+}
+
+// ======================================================================
+// HTML BUILDERS
+// ======================================================================
+function metricCard(label, value, delta, dir, subtitle) {
+  return '<div class="metric-card">' +
+    '<div class="metric-label">' + label + '</div>' +
+    '<div class="metric-value ' + dir + '">' + value + '</div>' +
+    '<div class="metric-delta ' + dir + '">' + delta + '</div>' +
+    '<div class="metric-subtitle">' + subtitle + '</div>' +
+    '</div>';
+}
+
+function sectionStart(title) {
+  return '<div class="section"><div class="section-header">' + title + '</div>';
+}
+
+function sectionEnd() {
+  return '</div>';
+}
+
+function aiBox(label, text, colorClass) {
+  if (!text) return '<div class="ai-insight ' + (colorClass || '') + '"><div class="ai-empty">AI insight will appear after the next daily refresh.</div></div>';
+  return '<div class="ai-insight ' + (colorClass || '') + '">' +
+    '<div class="ai-insight-label">' + label + '</div>' +
+    escHtml(text) +
+    '</div>';
+}
+
+function buildFreshnessTable() {
+  var rows = DATA.freshness || [];
+  if (rows.length === 0) return '<p class="ai-empty">Freshness data not yet available.</p>';
+  var headers = Object.keys(rows[0]);
+  var html = '<table class="freshness-table"><thead><tr>';
+  for (var i = 0; i < headers.length; i++) {
+    html += '<th>' + headers[i] + '</th>';
+  }
+  html += '</tr></thead><tbody>';
+  for (var r = 0; r < rows.length; r++) {
+    html += '<tr>';
+    for (var c = 0; c < headers.length; c++) {
+      html += '<td>' + (rows[r][headers[c]] || '') + '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+// ======================================================================
+// CHARTS
+// ======================================================================
+function renderTrendChart() {
+  var el = document.getElementById('chart-trend');
+  if (!el) return;
+  var weekly = DATA.weekly || [];
+  // Show last 3 years
+  var cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 3);
+  var filtered = weekly.filter(function(r) { return new Date(r.date) >= cutoff; });
+
+  var dates = filtered.map(function(r) { return r.date; });
+  var traces = [
+    { x: dates, y: filtered.map(function(r) { return r.insurance; }),
+      name: 'Insurance Searches', line: { color: COLORS.teal, width: 2.5 }, type: 'scatter', mode: 'lines' },
+    { x: dates, y: filtered.map(function(r) { return r.holiday; }),
+      name: 'Holiday Searches', line: { color: COLORS.blue, width: 2, dash: 'dot' }, type: 'scatter', mode: 'lines' },
+    { x: dates, y: filtered.map(function(r) { return r.combined; }),
+      name: 'Combined', line: { color: COLORS.gold, width: 3 }, type: 'scatter', mode: 'lines' }
+  ];
+  var layout = Object.assign({}, CHART_LAYOUT, { height: 380 });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+function renderYoYChart() {
+  var el = document.getElementById('chart-yoy');
+  if (!el) return;
+  var weekly = DATA.weekly || [];
+  if (weekly.length < 60) return;
+
+  // Compute rolling 52-week YoY % change for insurance
+  var yoyData = [];
+  for (var i = 52; i < weekly.length; i++) {
+    var current = parseFloat(weekly[i].insurance) || 0;
+    var prev = parseFloat(weekly[i - 52].insurance) || 0;
+    if (prev > 0) {
+      yoyData.push({ date: weekly[i].date, pct: ((current - prev) / prev) * 100 });
+    }
+  }
+  // Last 2 years
+  var cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 2);
+  yoyData = yoyData.filter(function(r) { return new Date(r.date) >= cutoff; });
+
+  var colors = yoyData.map(function(r) { return r.pct >= 0 ? COLORS.teal : COLORS.red; });
+  var traces = [{
+    x: yoyData.map(function(r) { return r.date; }),
+    y: yoyData.map(function(r) { return r.pct; }),
+    type: 'bar',
+    marker: { color: colors },
+    hovertemplate: '%{x}: %{y:+.1f}%<extra></extra>'
+  }];
+  var layout = Object.assign({}, CHART_LAYOUT, {
+    height: 260, showlegend: false,
+    yaxis: Object.assign({}, CHART_LAYOUT.yaxis, { ticksuffix: '%' })
+  });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+function renderSeasonalChart() {
+  var el = document.getElementById('chart-seasonal');
+  if (!el) return;
+  var weekly = DATA.weekly || [];
+  if (weekly.length < 104) return;
+
+  // Group by week number, overlay years
+  var byYear = {};
+  weekly.forEach(function(r) {
+    var d = new Date(r.date);
+    var yr = d.getFullYear();
+    var weekNum = Math.ceil((d - new Date(yr, 0, 1)) / (7 * 86400000));
+    if (!byYear[yr]) byYear[yr] = [];
+    byYear[yr].push({ week: weekNum, val: parseFloat(r.insurance) || 0 });
+  });
+
+  var years = Object.keys(byYear).sort();
+  var currentYear = new Date().getFullYear();
+  var traces = [];
+
+  years.forEach(function(yr) {
+    var isRecent = parseInt(yr) >= currentYear - 1;
+    var data = byYear[yr].sort(function(a, b) { return a.week - b.week; });
+    traces.push({
+      x: data.map(function(d) { return d.week; }),
+      y: data.map(function(d) { return d.val; }),
+      name: yr,
+      type: 'scatter', mode: 'lines',
+      line: {
+        color: parseInt(yr) === currentYear ? COLORS.gold : (parseInt(yr) === currentYear - 1 ? COLORS.blue : COLORS.textMuted),
+        width: isRecent ? 2.5 : 1,
+        dash: isRecent ? 'solid' : 'dot'
+      },
+      opacity: isRecent ? 1 : 0.3
+    });
+  });
+
+  var layout = Object.assign({}, CHART_LAYOUT, {
+    height: 320,
+    xaxis: Object.assign({}, CHART_LAYOUT.xaxis, { title: { text: 'Week of year', font: { size: 11, color: COLORS.textMuted } } })
+  });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+function renderDivergenceChart() {
+  var el = document.getElementById('chart-divergence');
+  if (!el) return;
+  var weekly = DATA.weekly || [];
+  var cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 2);
+  var filtered = weekly.filter(function(r) { return new Date(r.date) >= cutoff; });
+
+  var gaps = filtered.map(function(r) {
+    return { date: r.date, gap: (parseFloat(r.insurance) || 0) - (parseFloat(r.holiday) || 0) };
+  });
+  var colors = gaps.map(function(r) { return r.gap >= 0 ? COLORS.teal : COLORS.blue; });
+
+  var traces = [{
+    x: gaps.map(function(r) { return r.date; }),
+    y: gaps.map(function(r) { return r.gap; }),
+    type: 'bar',
+    marker: { color: colors },
+    hovertemplate: '%{x}: %{y:+.1f} pts<extra></extra>'
+  }];
+  var layout = Object.assign({}, CHART_LAYOUT, { height: 250, showlegend: false });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+function renderQuarterlyChart() {
+  var el = document.getElementById('chart-quarterly');
+  if (!el) return;
+  var quarterly = DATA.quarterly || [];
+  if (quarterly.length === 0) return;
+
+  // Get last 8 quarters
+  var recent = quarterly.slice(-8);
+  var quarters = recent.map(function(r) { return r.quarter; });
+
+  var seriesMap = {
+    'Holiday_Intent_Index': { name: 'Holiday Intent', color: COLORS.blue },
+    'Insurance_Intent_Index': { name: 'Insurance Intent', color: COLORS.teal },
+    'UK_Passengers_Index': { name: 'UK Passengers', color: COLORS.orange },
+    'Visits_Abroad_Index': { name: 'Visits Abroad', color: COLORS.magenta },
+    'Global_Aviation_Index': { name: 'Global Aviation', color: COLORS.gold }
+  };
+
+  var traces = [];
+  Object.keys(seriesMap).forEach(function(key) {
+    var vals = recent.map(function(r) { return parseFloat(r[key]) || null; });
+    if (vals.some(function(v) { return v !== null && v > 0; })) {
+      traces.push({
+        x: quarters, y: vals,
+        name: seriesMap[key].name,
+        type: 'bar',
+        marker: { color: seriesMap[key].color }
+      });
+    }
+  });
+
+  var layout = Object.assign({}, CHART_LAYOUT, {
+    height: 320, barmode: 'group',
+    yaxis: Object.assign({}, CHART_LAYOUT.yaxis, { title: { text: '2019 = 100', font: { size: 11, color: COLORS.textMuted } } })
+  });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+function renderCompetitorChart() {
+  var el = document.getElementById('chart-competitors');
+  if (!el) return;
+  var compData = DATA.competitors || [];
+  if (compData.length === 0) { el.innerHTML = '<p class="ai-empty">Competitor data will appear after the next refresh.</p>'; return; }
+
+  // Pivot: date -> { term: value }
+  var pivoted = {};
+  compData.forEach(function(r) {
+    if (!pivoted[r.date]) pivoted[r.date] = {};
+    pivoted[r.date][r.term] = parseFloat(r.value) || 0;
+  });
+
+  var dates = Object.keys(pivoted).sort();
+  var terms = {};
+  compData.forEach(function(r) { terms[r.term] = true; });
+  var termList = Object.keys(terms);
+  var palette = [COLORS.teal, COLORS.blue, COLORS.orange, COLORS.magenta, COLORS.gold, COLORS.red, COLORS.purpleLight];
+
+  var traces = termList.map(function(term, i) {
+    return {
+      x: dates,
+      y: dates.map(function(d) { return (pivoted[d] && pivoted[d][term]) || 0; }),
+      name: term.replace(/_/g, ' '),
+      type: 'scatter', mode: 'lines',
+      line: { color: palette[i % palette.length], width: 2 }
+    };
+  });
+
+  var layout = Object.assign({}, CHART_LAYOUT, { height: 280 });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+function renderChannelChart() {
+  var el = document.getElementById('chart-channels');
+  if (!el) return;
+  var chanData = DATA.channels || [];
+  if (chanData.length === 0) { el.innerHTML = '<p class="ai-empty">Channel data will appear after the next refresh.</p>'; return; }
+
+  var pivoted = {};
+  chanData.forEach(function(r) {
+    if (!pivoted[r.date]) pivoted[r.date] = {};
+    pivoted[r.date][r.term] = parseFloat(r.value) || 0;
+  });
+
+  var dates = Object.keys(pivoted).sort();
+  var terms = {};
+  chanData.forEach(function(r) { terms[r.term] = true; });
+  var termList = Object.keys(terms);
+  var palette = [COLORS.teal, COLORS.blue, COLORS.orange, COLORS.gold, COLORS.magenta];
+
+  var traces = termList.map(function(term, i) {
+    return {
+      x: dates,
+      y: dates.map(function(d) { return (pivoted[d] && pivoted[d][term]) || 0; }),
+      name: term.replace(/_/g, ' '),
+      type: 'scatter', mode: 'lines',
+      line: { color: palette[i % palette.length], width: 2 }
+    };
+  });
+
+  var layout = Object.assign({}, CHART_LAYOUT, { height: 250 });
+  Plotly.newPlot(el, traces, layout, CHART_CONFIG);
+}
+
+// ======================================================================
+// INIT
+// ======================================================================
+document.addEventListener('DOMContentLoaded', function() {
+  try { render(); } catch(e) { console.error('Dashboard render error:', e); }
+});
+</script>
+</body>
+</html>

@@ -189,13 +189,14 @@ ANALYST_PROMPT = f"""You brief the Holiday Extras insurance team. They're busy. 
 {HX_STRATEGY_CONTEXT}
 
 RULES:
-- Reply in plain English a 12-year-old could understand. Short sentences. No jargon.
-- NEVER use asterisks, markdown formatting, or special symbols. Use <b> tags if you need bold.
+- Reply in plain English a 12-year-old could understand. No jargon.
+- NEVER use asterisks, markdown formatting, bullet points, or special symbols. Use <b> tags if you need bold.
 - Never say "index", "SA", "normalised", "basis points". Say "up 15% vs last year".
 - All data is Google search volume, NOT sales. More searches does not mean more HX customers. Say how to CAPTURE demand.
-- Name specifics: airlines, dates, destinations, news events. Vague is useless.
-- End with ONE action: who does what, which channel, by when.
-- MAX 280 characters total. Tweet-length. No filler. No preamble."""
+- Insurance search volume is the primary KPI. The gap between insurance and holiday searches is a secondary consideration.
+- Name specifics: airlines, destinations, news events. Vague is useless.
+- End with ONE suggested action: who does what, which channel. Never include specific date deadlines like "by Friday" or "this week".
+- Write in natural flowing sentences. Never use bullet points or numbered lists. Keep it to 3-4 sentences maximum. No filler. No preamble."""
 
 
 def fetch_section_trends() -> dict:
@@ -370,6 +371,144 @@ def build_full_context(ctx, extra_trends, hx_trends):
 
 
 # ---------------------------------------------------------------------------
+# Google Sheets export (for Apps Script dashboard)
+# ---------------------------------------------------------------------------
+def _post_to_sheets(tab_name, headers, rows):
+    """Write data to Google Sheets via the Apps Script webhook."""
+    import requests
+    url = os.environ.get("APPS_SCRIPT_WEBHOOK_URL", "")
+    if not url:
+        log(f"  SKIP sheets write — no APPS_SCRIPT_WEBHOOK_URL")
+        return
+    payload = {"action": "write", "tab": tab_name, "headers": headers, "rows": rows}
+    try:
+        resp = requests.post(url, json=payload, timeout=60)
+        resp.raise_for_status()
+        log(f"  Wrote {len(rows)} rows to '{tab_name}'")
+    except Exception as e:
+        log(f"  Failed to write '{tab_name}': {e}")
+
+
+def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, hx_trends,
+                                c_now, h_now, i_now, c_last_year, h_last_year, i_last_year,
+                                yoy, wow, gap,
+                                matters_q, dd_q, trend_q, div_q, ch_q, seasonal_q, yoy_q, xsrc_q,
+                                news_system, news_user):
+    """Export all dashboard data to Google Sheets for the Apps Script web app."""
+
+    # 5a. Dashboard Weekly — the time series for charts
+    if not weekly.empty:
+        headers = ["date", "combined", "holiday", "insurance"]
+        rows = []
+        for _, r in weekly.iterrows():
+            d = r["date"].strftime("%Y-%m-%d") if hasattr(r["date"], "strftime") else str(r["date"])
+            rows.append([d,
+                         round(float(r.get("combined", 0)), 1),
+                         round(float(r.get("holiday", 0)), 1),
+                         round(float(r.get("insurance", 0)), 1)])
+        _post_to_sheets("Dashboard Weekly", headers, rows)
+
+    # 5b. Dashboard Metrics — key headline numbers
+    gap_last_year = i_last_year - h_last_year
+    h_yoy = ((h_now - h_last_year) / h_last_year * 100) if h_last_year else 0
+    i_yoy = ((i_now - i_last_year) / i_last_year * 100) if i_last_year else 0
+    metrics_rows = [
+        ["yoy", round(yoy, 1), "up" if yoy > 0 else "down", "Overall market demand vs last year"],
+        ["wow", round(wow, 1), "up" if wow > 0 else "down", "4-week momentum"],
+        ["c_now", round(c_now, 1), "", "Combined index current value"],
+        ["h_now", round(h_now, 1), "", "Holiday searches current"],
+        ["i_now", round(i_now, 1), "", "Insurance searches current"],
+        ["c_last_year", round(c_last_year, 1), "", "Combined index last year"],
+        ["h_last_year", round(h_last_year, 1), "", "Holiday searches last year"],
+        ["i_last_year", round(i_last_year, 1), "", "Insurance searches last year"],
+        ["h_yoy", round(h_yoy, 1), "up" if h_yoy > 0 else "down", "Holiday dreamers vs last year"],
+        ["i_yoy", round(i_yoy, 1), "up" if i_yoy > 0 else "down", "Insurance shoppers vs last year"],
+        ["gap", round(gap, 1), "up" if gap > 0 else "down", "Insurance minus holiday searches"],
+        ["gap_last_year", round(gap_last_year, 1), "", "Gap last year"],
+    ]
+    _post_to_sheets("Dashboard Metrics", ["metric_key", "value", "direction", "description"], metrics_rows)
+
+    # 5c. AI Insights — read from disk cache
+    from datetime import datetime as _dt
+    now_str = _dt.now().strftime("%Y-%m-%d %H:%M")
+    ai_rows = []
+    insight_queries = {
+        "what_matters": (matters_q, ANALYST_PROMPT),
+        "deep_dive": (dd_q, ANALYST_PROMPT),
+        "trend": (trend_q, ANALYST_PROMPT),
+        "divergence": (div_q, ANALYST_PROMPT),
+        "channels": (ch_q, ANALYST_PROMPT),
+        "seasonal": (seasonal_q, ANALYST_PROMPT),
+        "yoy": (yoy_q, ANALYST_PROMPT),
+        "quarterly": (xsrc_q, ANALYST_PROMPT),
+        "news": (news_user, news_system),
+    }
+    for section_key, (user_q, system_q) in insight_queries.items():
+        # Read from disk cache (same logic as cached_ai)
+        if section_key == "news":
+            ck = hashlib.sha256(f"{system_q[:50]}_{user_q[:50]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
+        elif section_key in ("what_matters", "deep_dive"):
+            ck = hashlib.sha256(f"{hashlib.sha256(user_q.encode()).hexdigest()[:16]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
+        else:
+            ck = hashlib.sha256(f"{hashlib.sha256(user_q.encode()).hexdigest()[:16]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
+        cached = _disk_cache_get("ai", ck)
+        if cached:
+            ai_rows.append([section_key, cached, now_str])
+        else:
+            ai_rows.append([section_key, "", now_str])
+
+    _post_to_sheets("AI Insights", ["section_key", "insight_text", "generated_at"], ai_rows)
+
+    # 5d. Dashboard Section Trends — bespoke Google Trends per section
+    trend_rows = []
+    for section_key, terms_data in section_trends.items():
+        for term, stats in terms_data.items():
+            trend_rows.append([
+                section_key, term,
+                stats.get("current", 0), stats.get("peak", 0),
+                stats.get("change_pct", 0), stats.get("trending", "flat")
+            ])
+    if trend_rows:
+        _post_to_sheets("Dashboard Section Trends",
+                        ["section", "term", "current", "peak", "change_pct", "trending"],
+                        trend_rows)
+
+    # 5e. Dashboard Competitors — competitor + price sensitivity trends
+    comp_rows = []
+    for key in ("competitors", "price_sensitivity"):
+        df = extra_trends.get(key)
+        if df is not None and not df.empty:
+            for _, r in df.iterrows():
+                d = r.name if hasattr(r.name, "strftime") else str(r.name)
+                if hasattr(d, "strftime"):
+                    d = d.strftime("%Y-%m-%d")
+                for col in df.columns:
+                    comp_rows.append([str(d), key, col, round(float(r[col]), 1)])
+    if comp_rows:
+        _post_to_sheets("Dashboard Competitors",
+                        ["date", "category", "term", "value"],
+                        comp_rows)
+
+    # 5f. Dashboard Channels — parking + white label trends
+    chan_rows = []
+    for key, src in [("parking", hx_trends), ("white_label", extra_trends)]:
+        df = src.get(key) if isinstance(src, dict) else None
+        if df is not None and not df.empty:
+            for _, r in df.iterrows():
+                d = r.name if hasattr(r.name, "strftime") else str(r.name)
+                if hasattr(d, "strftime"):
+                    d = d.strftime("%Y-%m-%d")
+                for col in df.columns:
+                    chan_rows.append([str(d), key, col, round(float(r[col]), 1)])
+    if chan_rows:
+        _post_to_sheets("Dashboard Channels",
+                        ["date", "category", "term", "value"],
+                        chan_rows)
+
+    log("  Sheets export complete.")
+
+
+# ---------------------------------------------------------------------------
 # Main cache warming
 # ---------------------------------------------------------------------------
 def main():
@@ -440,8 +579,8 @@ def main():
         f"\n\nIn 2-3 sentences, explain what these signals mean for Holiday Extras. "
         f"Use the Google Trends data to explain WHY these things are happening. "
         f"REMEMBER: More people searching does NOT mean more HX customers. "
-        f"What specific action should the team take THIS WEEK to capture the opportunity? "
-        f"Be specific: who does what, on which channel, by when.")
+        f"What specific action should the team take to capture the opportunity? "
+        f"Be specific: who does what, on which channel.")
     call_ai(matters_q, ANALYST_PROMPT)
 
     # 4b. Deep dive
@@ -461,12 +600,10 @@ def main():
 RULES:
 - Reply in plain English a 12-year-old could understand. No asterisks, no markdown, no special symbols.
 - Use <b> tags for emphasis. NEVER use ** or *.
+- Write in flowing sentences, not bullet points or lists.
 - MAX 600 characters total.
 
-FORMAT: Return 3-4 items MAX. Only the most important. For each:
-<b>[Headline]</b> -- [1 sentence what happened]. <b>HX action:</b> [1 sentence what to do].
-
-Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
+Write 3-4 short paragraphs about the most important news items. Each paragraph should name the headline, explain what happened in one sentence, and suggest what HX should consider doing about it. Never include specific date deadlines. Skip anything generic."""
     news_user = ("Search the web for the most important UK travel insurance news in the last 2-4 weeks. "
                   "Include real headlines and sources. Focus on anything affecting travel demand, "
                   "insurance pricing, airline disruption, or competitor moves in the UK market.")
@@ -484,7 +621,7 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
                f"Using the Google Trends above (cheap flights, travel chaos, passport renewals etc), "
                f"explain WHY travel insurance demand is {'rising' if yoy > 2 else 'falling' if yoy < -2 else 'flat'}. "
                f"What real-world event or behaviour is driving this? "
-               f"One specific action HX should take THIS WEEK to capture this demand.")
+               f"One specific action HX should take to capture this demand.")
     call_ai(trend_q, ANALYST_PROMPT)
 
     # 4e. Divergence (buyers vs dreamers)
@@ -507,7 +644,7 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
              f"Using the trends above (GHIC cards, 'do I need travel insurance', booking patterns), "
              f"explain why {'insurance' if gap > 0 else 'holiday'} searches are leading. "
              f"Are people closer to buying or still dreaming? "
-             f"One specific thing HX should do right now to convert these searchers into customers.")
+             f"One specific thing HX should do to convert these searchers into customers.")
     call_ai(div_q, ANALYST_PROMPT)
 
     # 4f. Channels
@@ -538,7 +675,7 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
             f"HX has 4 channels: Direct (airport parking cross-sell), PPC/SEO (new customers from search), "
             f"White Labels (Carnival Cruises, Fred Olsen), Aggregators (Compare the Market, CYTI). "
             f"Parking searches are {park_ch:+.0f}%, white label partner interest is {wl_ch:+.0f}%. "
-            f"Using the Google Trends above, which channel has the biggest opportunity RIGHT NOW? "
+            f"Using the Google Trends above, which channel has the biggest opportunity? "
             f"One specific action per channel that's moving. Skip channels with nothing noteworthy.")
     call_ai(ch_q, ANALYST_PROMPT)
 
@@ -571,7 +708,7 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
                   f"what's driving seasonal demand right now? "
                   f"What happens to travel insurance demand in the next 6-8 weeks? "
                   f"Name specific dates (school holidays, bank holidays, booking deadlines) and "
-                  f"one thing HX should prepare NOW to capture the next wave.")
+                  f"one thing HX should prepare to capture the next wave.")
     call_ai(seasonal_q, ANALYST_PROMPT)
 
     # 4i. Year-on-year
@@ -596,7 +733,18 @@ Skip anything generic. Every item must have a clear "so what" for Holiday Extras
               f"One-line confidence verdict for HX decision-makers.")
     call_ai(xsrc_q, ANALYST_PROMPT)
 
-    # 5. Done
+    # 5. Export dashboard data to Google Sheets (for Apps Script web app)
+    log("Exporting dashboard data to Google Sheets...")
+    export_dashboard_to_sheets(
+        weekly, sa_weekly, section_trends, extra_trends, hx_trends,
+        c_now, h_now, i_now, c_last_year, h_last_year, i_last_year,
+        yoy, wow, gap,
+        # Re-collect all AI insights from disk cache
+        matters_q, dd_q, trend_q, div_q, ch_q, seasonal_q, yoy_q, xsrc_q,
+        news_system, news_user,
+    )
+
+    # 6. Done
     elapsed = time.time() - start
     log(f"Cache warm complete in {elapsed:.0f}s")
     log("=" * 60)

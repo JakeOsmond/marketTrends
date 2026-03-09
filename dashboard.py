@@ -1033,13 +1033,14 @@ ANALYST_PROMPT = f"""You brief the Holiday Extras insurance team. They're busy. 
 {HX_STRATEGY_CONTEXT}
 
 RULES:
-- Reply in plain English a 12-year-old could understand. Short sentences. No jargon.
-- NEVER use asterisks, markdown formatting, or special symbols. Use <b> tags if you need bold.
+- Reply in plain English a 12-year-old could understand. No jargon.
+- NEVER use asterisks, markdown formatting, bullet points, or special symbols. Use <b> tags if you need bold.
 - Never say "index", "SA", "normalised", "basis points". Say "up 15% vs last year".
 - All data is Google search volume, NOT sales. More searches does not mean more HX customers. Say how to CAPTURE demand.
-- Name specifics: airlines, dates, destinations, news events. Vague is useless.
-- End with ONE action: who does what, which channel, by when.
-- MAX 280 characters total. Tweet-length. No filler. No preamble."""
+- Insurance search volume is the primary KPI. The gap between insurance and holiday searches is a secondary consideration.
+- Name specifics: airlines, destinations, news events. Vague is useless.
+- End with ONE suggested action: who does what, which channel. Never include specific date deadlines like "by Friday" or "this week".
+- Write in natural flowing sentences. Never use bullet points or numbered lists. Keep it to 3-4 sentences maximum. No filler. No preamble."""
 
 
 _BAD_RESPONSE_MARKERS = [
@@ -1762,7 +1763,7 @@ def render_trend(sa_weekly, _ctx, c_now, yoy, wow, max_date, section_trends=None
          f"Using the Google Trends above (cheap flights, travel chaos, passport renewals etc), "
          f"explain WHY travel insurance demand is {'rising' if yoy > 2 else 'falling' if yoy < -2 else 'flat'}. "
          f"What real-world event or behaviour is driving this? "
-         f"One specific action HX should take THIS WEEK to capture this demand.")
+         f"One specific action HX should take to capture this demand.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing market trend", HX_PURPLE_LIGHT), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -1835,7 +1836,7 @@ def render_divergence(sa_weekly, _ctx, i_now, h_now, gap, i_last_year, h_last_ye
          f"Using the trends above (GHIC cards, 'do I need travel insurance', booking patterns), "
          f"explain why {'insurance' if gap > 0 else 'holiday'} searches are leading. "
          f"Are people closer to buying or still dreaming? "
-         f"One specific thing HX should do right now to convert these searchers into customers.")
+         f"One specific thing HX should do to convert these searchers into customers.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing searchers vs dreamers", TEAL), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -1924,7 +1925,7 @@ def render_channels(hx_trends, extra_trends, _ctx, comp_df, section_trends=None)
             f"HX has 4 channels: Direct (airport parking cross-sell), PPC/SEO (new customers from search), "
             f"White Labels (Carnival Cruises, Fred Olsen), Aggregators (Compare the Market, CYTI). "
             f"Parking searches are {park_ch:+.0f}%, white label partner interest is {wl_ch:+.0f}%. "
-            f"Using the Google Trends above, which channel has the biggest opportunity RIGHT NOW? "
+            f"Using the Google Trends above, which channel has the biggest opportunity? "
             f"One specific action per channel that's moving. Skip channels with nothing noteworthy.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing channels", HX_PURPLE_LIGHT), unsafe_allow_html=True)
@@ -2023,12 +2024,10 @@ NEWS_SYSTEM_PROMPT = f"""Search the web for UK travel insurance news from the la
 RULES:
 - Reply in plain English a 12-year-old could understand. No asterisks, no markdown, no special symbols.
 - Use <b> tags for emphasis. NEVER use ** or *.
+- Write in flowing sentences, not bullet points or lists.
 - MAX 600 characters total.
 
-FORMAT: Return 3-4 items MAX. Only the most important. For each:
-<b>[Headline]</b> -- [1 sentence what happened]. <b>HX action:</b> [1 sentence what to do].
-
-Skip anything generic. Every item must have a clear "so what" for Holiday Extras."""
+Write 3-4 short paragraphs about the most important news items. Each paragraph should name the headline, explain what happened in one sentence, and suggest what HX should consider doing about it. Never include specific date deadlines. Skip anything generic."""
 
 NEWS_USER_PROMPT = ("Search the web for the most important UK travel insurance news in the last 2-4 weeks. "
                     "Include real headlines and sources. Focus on anything affecting travel demand, "
@@ -2147,8 +2146,8 @@ def render_seasonal(weekly, latest_date, _ctx, yoy, section_trends=None):
          f"Using the trends above (summer bookings, half term, ski holidays, Easter, last minute), "
          f"what's driving seasonal demand right now? "
          f"What happens to travel insurance demand in the next 6-8 weeks? "
-         f"Name specific dates (school holidays, bank holidays, booking deadlines) and "
-         f"one thing HX should prepare NOW to capture the next wave.")
+         f"Name specific upcoming dates (school holidays, bank holidays, booking deadlines) and "
+         f"one thing HX should prepare to capture the next wave.")
     ai_slot = st.empty()
     ai_slot.markdown(ai_loading_box("AI analysing seasonal patterns", ORANGE), unsafe_allow_html=True)
     ai_result = _call_openai_with_timeout(q, timeout_secs=10)
@@ -2383,8 +2382,8 @@ def main():
             f"\n\nIn 2-3 sentences, explain what these signals mean for Holiday Extras. "
             f"Use the Google Trends data to explain WHY these things are happening. "
             f"REMEMBER: More people searching does NOT mean more HX customers. "
-            f"What specific action should the team take THIS WEEK to capture the opportunity? "
-            f"Be specific: who does what, on which channel, by when.")
+            f"What specific action should the team take to capture the opportunity? "
+            f"Be specific: who does what, on which channel.")
         matters_result = _call_openai_with_timeout(matters_q, timeout_secs=15)
 
     # Step 6b: Pre-generate news + deep dive (so they're cached before render)
