@@ -37,6 +37,8 @@ jobs:
           APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
 
       - name: Warm AI caches
+        continue-on-error: true
+        timeout-minutes: 10
         run: python warm_cache.py
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

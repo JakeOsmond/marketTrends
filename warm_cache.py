@@ -203,8 +203,12 @@ def fetch_section_trends() -> dict:
     from pytrends.request import TrendReq
     pytrends = TrendReq(hl="en-GB", tz=0)
     results = {}
+    rate_limited = False
     for section, terms in SECTION_TREND_TERMS.items():
         section_data = {}
+        if rate_limited:
+            results[section] = section_data
+            continue
         try:
             pytrends.build_payload(terms[:5], cat=0, timeframe="today 12-m", geo="GB")
             time.sleep(3)
@@ -221,8 +225,10 @@ def fetch_section_trends() -> dict:
                             "change_pct": round(change, 1),
                             "trending": "up" if change > 10 else ("down" if change < -10 else "flat"),
                         }
-        except Exception:
-            pass
+        except Exception as e:
+            if "429" in str(e):
+                log(f"  Google Trends rate-limited (429) — skipping remaining section trends")
+                rate_limited = True
         results[section] = section_data
     return results
 
@@ -307,8 +313,10 @@ def load_extra_trends():
             df = gi.fetch_terms(terms, timeframe="today 12-m")
             if not df.empty:
                 result[key] = df
-        except Exception:
-            pass
+        except Exception as e:
+            if "429" in str(e):
+                log(f"  Google Trends rate-limited — skipping remaining extra trends")
+                break
     return result
 
 
@@ -320,8 +328,9 @@ def load_hx_trends():
         df = gi.fetch_terms(PARKING_CROSSSELL, timeframe="today 12-m")
         if not df.empty:
             result["parking"] = df
-    except Exception:
-        pass
+    except Exception as e:
+        if "429" in str(e):
+            log(f"  Google Trends rate-limited — skipping HX trends")
     return result
 
 
