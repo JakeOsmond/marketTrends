@@ -289,7 +289,13 @@ class GoogleTrendsIngestion:
         return self.validate(result)
 
     def get_latest(self, force_refresh: bool = False) -> pd.DataFrame:
-        """Fetch the most recent period of data."""
+        """Fetch the last 2 years of data.
+
+        Uses a 2-year window so that:
+        - YoY comparisons are valid (both years in the same query = same scale)
+        - Fewer API calls than a full backfill (avoids rate limiting)
+        - No cross-query stitching needed (Google Trends normalises 0-100 per query)
+        """
         end_date = date.today()
-        start_date = date(end_date.year - 1, end_date.month, 1)
+        start_date = date(end_date.year - 2, end_date.month, 1)
         return self.backfill(start_date, end_date, force_refresh=force_refresh)

@@ -276,11 +276,9 @@ def build_weekly_trends(sources):
     weekly = weekly.pivot(index="week", columns="category", values="normalised_value").reset_index()
     weekly.columns.name = None
     weekly = weekly.rename(columns={"week": "date"})
-    for col in ["holiday", "insurance"]:
-        if col in weekly.columns:
-            baseline = weekly.loc[weekly["date"].dt.year == BASELINE_YEAR, col].mean()
-            if baseline and baseline > 0:
-                weekly[col] = (weekly[col] / baseline) * 100
+    # Google Trends values are already 0-100 within the query period.
+    # With a 2-year query window, YoY comparisons are valid (same scale).
+    # No 2019 baseline reindexing — values are relative within the query.
     idx_cols = [c for c in ["holiday", "insurance"] if c in weekly.columns]
     if idx_cols:
         weekly["combined"] = weekly[idx_cols].mean(axis=1)
