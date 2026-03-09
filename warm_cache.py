@@ -389,14 +389,12 @@ def _post_to_sheets(tab_name, headers, rows):
         log(f"  Failed to write '{tab_name}': {e}")
 
 
-def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, hx_trends,
-                                c_now, h_now, i_now, c_last_year, h_last_year, i_last_year,
-                                yoy, wow, gap,
-                                matters_q, dd_q, trend_q, div_q, ch_q, seasonal_q, yoy_q, xsrc_q,
-                                news_system, news_user):
-    """Export all dashboard data to Google Sheets for the Apps Script web app."""
+def _export_chart_data(weekly, sa_weekly, section_trends, extra_trends, hx_trends,
+                       c_now, h_now, i_now, c_last_year, h_last_year, i_last_year,
+                       yoy, wow, gap):
+    """Export chart data + metrics to Google Sheets (fast — no AI dependency)."""
 
-    # 5a. Dashboard Weekly — the time series for charts
+    # Dashboard Weekly — the time series for charts
     if not weekly.empty:
         headers = ["date", "combined", "holiday", "insurance"]
         rows = []
@@ -408,7 +406,7 @@ def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, 
                          round(float(r.get("insurance", 0)), 1)])
         _post_to_sheets("Dashboard Weekly", headers, rows)
 
-    # 5b. Dashboard Metrics — key headline numbers
+    # Dashboard Metrics — key headline numbers
     gap_last_year = i_last_year - h_last_year
     h_yoy = ((h_now - h_last_year) / h_last_year * 100) if h_last_year else 0
     i_yoy = ((i_now - i_last_year) / i_last_year * 100) if i_last_year else 0
@@ -428,38 +426,7 @@ def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, 
     ]
     _post_to_sheets("Dashboard Metrics", ["metric_key", "value", "direction", "description"], metrics_rows)
 
-    # 5c. AI Insights — read from disk cache
-    from datetime import datetime as _dt
-    now_str = _dt.now().strftime("%Y-%m-%d %H:%M")
-    ai_rows = []
-    insight_queries = {
-        "what_matters": (matters_q, ANALYST_PROMPT),
-        "deep_dive": (dd_q, ANALYST_PROMPT),
-        "trend": (trend_q, ANALYST_PROMPT),
-        "divergence": (div_q, ANALYST_PROMPT),
-        "channels": (ch_q, ANALYST_PROMPT),
-        "seasonal": (seasonal_q, ANALYST_PROMPT),
-        "yoy": (yoy_q, ANALYST_PROMPT),
-        "quarterly": (xsrc_q, ANALYST_PROMPT),
-        "news": (news_user, news_system),
-    }
-    for section_key, (user_q, system_q) in insight_queries.items():
-        # Read from disk cache (same logic as cached_ai)
-        if section_key == "news":
-            ck = hashlib.sha256(f"{system_q[:50]}_{user_q[:50]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
-        elif section_key in ("what_matters", "deep_dive"):
-            ck = hashlib.sha256(f"{hashlib.sha256(user_q.encode()).hexdigest()[:16]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
-        else:
-            ck = hashlib.sha256(f"{hashlib.sha256(user_q.encode()).hexdigest()[:16]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
-        cached = _disk_cache_get("ai", ck)
-        if cached:
-            ai_rows.append([section_key, cached, now_str])
-        else:
-            ai_rows.append([section_key, "", now_str])
-
-    _post_to_sheets("AI Insights", ["section_key", "insight_text", "generated_at"], ai_rows)
-
-    # 5d. Dashboard Section Trends — bespoke Google Trends per section
+    # Dashboard Section Trends
     trend_rows = []
     for section_key, terms_data in section_trends.items():
         for term, stats in terms_data.items():
@@ -473,7 +440,7 @@ def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, 
                         ["section", "term", "current", "peak", "change_pct", "trending"],
                         trend_rows)
 
-    # 5e. Dashboard Competitors — competitor + price sensitivity trends
+    # Dashboard Competitors
     comp_rows = []
     for key in ("competitors", "price_sensitivity"):
         df = extra_trends.get(key)
@@ -489,7 +456,7 @@ def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, 
                         ["date", "category", "term", "value"],
                         comp_rows)
 
-    # 5f. Dashboard Channels — parking + white label trends
+    # Dashboard Channels
     chan_rows = []
     for key, src in [("parking", hx_trends), ("white_label", extra_trends)]:
         df = src.get(key) if isinstance(src, dict) else None
@@ -505,7 +472,36 @@ def export_dashboard_to_sheets(weekly, sa_weekly, section_trends, extra_trends, 
                         ["date", "category", "term", "value"],
                         chan_rows)
 
-    log("  Sheets export complete.")
+    log("  Chart data export complete.")
+
+
+def _export_ai_insights(matters_q, dd_q, trend_q, div_q, ch_q, seasonal_q, yoy_q, xsrc_q,
+                        news_system, news_user):
+    """Export AI insights from disk cache to Google Sheets."""
+    from datetime import datetime as _dt
+    now_str = _dt.now().strftime("%Y-%m-%d %H:%M")
+    ai_rows = []
+    insight_queries = {
+        "what_matters": (matters_q, ANALYST_PROMPT),
+        "deep_dive": (dd_q, ANALYST_PROMPT),
+        "trend": (trend_q, ANALYST_PROMPT),
+        "divergence": (div_q, ANALYST_PROMPT),
+        "channels": (ch_q, ANALYST_PROMPT),
+        "seasonal": (seasonal_q, ANALYST_PROMPT),
+        "yoy": (yoy_q, ANALYST_PROMPT),
+        "quarterly": (xsrc_q, ANALYST_PROMPT),
+        "news": (news_user, news_system),
+    }
+    for section_key, (user_q, system_q) in insight_queries.items():
+        if section_key == "news":
+            ck = hashlib.sha256(f"{system_q[:50]}_{user_q[:50]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
+        else:
+            ck = hashlib.sha256(f"{hashlib.sha256(user_q.encode()).hexdigest()[:16]}|{system_q}|{user_q}".encode()).hexdigest()[:24]
+        cached = _disk_cache_get("ai", ck)
+        ai_rows.append([section_key, cached or "", now_str])
+
+    _post_to_sheets("AI Insights", ["section_key", "insight_text", "generated_at"], ai_rows)
+    log("  AI insights export complete.")
 
 
 # ---------------------------------------------------------------------------
@@ -562,11 +558,17 @@ def main():
     section_trends = fetch_section_trends()
     log(f"  Section trends: {[k for k, v in section_trends.items() if v]}")
 
-    # 3. Build contexts
+    # 3. Export chart data to Google Sheets FIRST (fast — before slow AI step)
+    log("Exporting chart data to Google Sheets...")
+    _export_chart_data(weekly, sa_weekly, section_trends, extra_trends, hx_trends,
+                       c_now, h_now, i_now, c_last_year, h_last_year, i_last_year,
+                       yoy, wow, gap)
+
+    # 4. Build contexts
     _ctx = build_context(sa_weekly, sources)
     _full_ctx = build_full_context(_ctx, extra_trends, hx_trends)
 
-    # 4. Pre-generate ALL AI calls
+    # 5. Pre-generate ALL AI calls (slow — can timeout)
     log("Generating AI insights...")
 
     # 4a. "What Matters Now"
@@ -733,18 +735,12 @@ Write 3-4 short paragraphs about the most important news items. Each paragraph s
               f"One-line confidence verdict for HX decision-makers.")
     call_ai(xsrc_q, ANALYST_PROMPT)
 
-    # 5. Export dashboard data to Google Sheets (for Apps Script web app)
-    log("Exporting dashboard data to Google Sheets...")
-    export_dashboard_to_sheets(
-        weekly, sa_weekly, section_trends, extra_trends, hx_trends,
-        c_now, h_now, i_now, c_last_year, h_last_year, i_last_year,
-        yoy, wow, gap,
-        # Re-collect all AI insights from disk cache
-        matters_q, dd_q, trend_q, div_q, ch_q, seasonal_q, yoy_q, xsrc_q,
-        news_system, news_user,
-    )
+    # 6. Export AI insights to Google Sheets
+    log("Exporting AI insights to Google Sheets...")
+    _export_ai_insights(matters_q, dd_q, trend_q, div_q, ch_q, seasonal_q, yoy_q, xsrc_q,
+                        news_system, news_user)
 
-    # 6. Done
+    # 7. Done
     elapsed = time.time() - start
     log(f"Cache warm complete in {elapsed:.0f}s")
     log("=" * 60)
