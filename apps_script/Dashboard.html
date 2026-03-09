@@ -534,7 +534,7 @@ function buildTrendCards(sectionKey) {
     html += '<div class="trend-card">';
     html += '<div class="trend-card-term">' + r.term + '</div>';
     html += '<div class="trend-card-value ' + dir + '">' + fmt(pct) + '</div>';
-    html += '<div class="trend-card-detail">Score: ' + current + '/100 (peak ' + peak + ')</div>';
+    html += '<div class="trend-card-detail">' + (pct > 5 ? 'Trending up' : (pct < -5 ? 'Trending down' : 'Stable')) + ' vs 12 months ago</div>';
     html += '</div>';
   });
   html += '</div>';
@@ -625,42 +625,53 @@ function renderSeasonalChart() {
   var el = document.getElementById('chart-seasonal');
   if (!el) return;
   var weekly = DATA.weekly || [];
-  if (weekly.length < 104) return;
+  if (weekly.length < 52) return;
 
-  // Group by week number, overlay years
+  // Group by week number — only current year and last year
   var byYear = {};
+  var currentYear = new Date().getFullYear();
+  var showYears = [currentYear, currentYear - 1];
+
   weekly.forEach(function(r) {
     var d = new Date(r.date);
     var yr = d.getFullYear();
+    if (showYears.indexOf(yr) === -1) return;
     var weekNum = Math.ceil((d - new Date(yr, 0, 1)) / (7 * 86400000));
     if (!byYear[yr]) byYear[yr] = [];
     byYear[yr].push({ week: weekNum, val: parseFloat(r.insurance) || 0 });
   });
 
-  var years = Object.keys(byYear).sort();
-  var currentYear = new Date().getFullYear();
-  var traces = [];
+  // Month labels for the x-axis (approximate week -> month mapping)
+  var monthTicks = [1, 5, 9, 14, 18, 22, 27, 31, 35, 40, 44, 48];
+  var monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  years.forEach(function(yr) {
-    var isRecent = parseInt(yr) >= currentYear - 1;
-    var data = byYear[yr].sort(function(a, b) { return a.week - b.week; });
+  var traces = [];
+  showYears.forEach(function(yr) {
+    var data = (byYear[yr] || []).sort(function(a, b) { return a.week - b.week; });
+    if (data.length === 0) return;
+    var isCurrent = yr === currentYear;
     traces.push({
       x: data.map(function(d) { return d.week; }),
       y: data.map(function(d) { return d.val; }),
-      name: yr,
+      name: String(yr),
       type: 'scatter', mode: 'lines',
       line: {
-        color: parseInt(yr) === currentYear ? COLORS.gold : (parseInt(yr) === currentYear - 1 ? COLORS.blue : COLORS.textMuted),
-        width: isRecent ? 2.5 : 1,
-        dash: isRecent ? 'solid' : 'dot'
-      },
-      opacity: isRecent ? 1 : 0.3
+        color: isCurrent ? COLORS.gold : COLORS.blue,
+        width: isCurrent ? 3 : 2,
+        dash: isCurrent ? 'solid' : 'dot'
+      }
     });
   });
 
   var layout = Object.assign({}, CHART_LAYOUT, {
     height: 320,
-    xaxis: Object.assign({}, CHART_LAYOUT.xaxis, { title: { text: 'Week of year', font: { size: 11, color: COLORS.textMuted } } })
+    xaxis: {
+      gridcolor: COLORS.grid, showgrid: false,
+      tickvals: monthTicks,
+      ticktext: monthLabels,
+      tickfont: { size: 11, color: COLORS.textMuted, family: 'Nunito, sans-serif' },
+      range: [0, 53]
+    }
   });
   Plotly.newPlot(el, traces, layout, CHART_CONFIG);
 }
