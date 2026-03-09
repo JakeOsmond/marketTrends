@@ -305,14 +305,19 @@ def _trend_pct(df, col=None):
 
 
 def load_extra_trends():
-    from src.ingestion.google_trends import GoogleTrendsIngestion
-    gi = GoogleTrendsIngestion()
+    """Fetch competitor and price sensitivity trends via pytrends directly."""
+    from pytrends.request import TrendReq
+    pytrends = TrendReq(hl="en-GB", tz=0)
     result = {}
     for key, terms in [("competitors", COMPETITOR_TERMS), ("price_sensitivity", PRICE_SENSITIVITY_TERMS),
                        ("white_label", WHITE_LABEL_PARTNERS)]:
         try:
-            df = gi.fetch_terms(terms, timeframe="today 12-m")
+            pytrends.build_payload(terms[:5], cat=0, timeframe="today 12-m", geo="GB")
+            time.sleep(3)
+            df = pytrends.interest_over_time()
             if not df.empty:
+                if "isPartial" in df.columns:
+                    df = df.drop(columns=["isPartial"])
                 result[key] = df
         except Exception as e:
             if "429" in str(e):
@@ -322,12 +327,17 @@ def load_extra_trends():
 
 
 def load_hx_trends():
-    from src.ingestion.google_trends import GoogleTrendsIngestion
-    gi = GoogleTrendsIngestion()
+    """Fetch HX channel trends via pytrends directly."""
+    from pytrends.request import TrendReq
+    pytrends = TrendReq(hl="en-GB", tz=0)
     result = {}
     try:
-        df = gi.fetch_terms(PARKING_CROSSSELL, timeframe="today 12-m")
+        pytrends.build_payload(PARKING_CROSSSELL[:5], cat=0, timeframe="today 12-m", geo="GB")
+        time.sleep(3)
+        df = pytrends.interest_over_time()
         if not df.empty:
+            if "isPartial" in df.columns:
+                df = df.drop(columns=["isPartial"])
             result["parking"] = df
     except Exception as e:
         if "429" in str(e):
