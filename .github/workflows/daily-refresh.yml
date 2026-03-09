@@ -31,7 +31,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run data pipeline
-        run: python -m src.main --backfill
+        run: python -m src.main --update
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
