@@ -5,8 +5,8 @@ on:
     # 06:00 UTC = 6am GMT (winter) / 7am BST (summer)
     # 05:00 UTC = 5am GMT (winter) / 6am BST (summer)
     # Both runs ensure fresh data by 7am UK time year-round
-    - cron: '0 5 * * *'
-    - cron: '0 6 * * *'
+    # - cron: '0 5 * * *'
+    # - cron: '0 6 * * *'
   workflow_dispatch: # Allow manual trigger from GitHub UI
 
 permissions:
