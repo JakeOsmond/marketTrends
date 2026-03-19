@@ -1,64 +1,64 @@
-name: Daily Data Refresh
+# name: Daily Data Refresh
 
-on:
-  schedule:
-    # 06:00 UTC = 6am GMT (winter) / 7am BST (summer)
-    # 05:00 UTC = 5am GMT (winter) / 6am BST (summer)
-    # Both runs ensure fresh data by 7am UK time year-round
-    # - cron: '0 5 * * *'
-    # - cron: '0 6 * * *'
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+# on:
+#   schedule:
+#     # 06:00 UTC = 6am GMT (winter) / 7am BST (summer)
+#     # 05:00 UTC = 5am GMT (winter) / 6am BST (summer)
+#     # Both runs ensure fresh data by 7am UK time year-round
+#     # - cron: '0 5 * * *'
+#     # - cron: '0 6 * * *'
+#   workflow_dispatch: # Allow manual trigger from GitHub UI
 
-permissions:
-  contents: write
+# permissions:
+#   contents: write
 
-jobs:
-  refresh:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+# jobs:
+#   refresh:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 30
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+#       - name: Set up Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.11'
+#           cache: 'pip'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+#       - name: Install dependencies
+#         run: pip install -r requirements.txt
 
-      - name: Run data pipeline
-        run: python -m src.main --update
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
+#       - name: Run data pipeline
+#         run: python -m src.main --update
+#         env:
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
 
-      - name: Warm AI caches
-        continue-on-error: true
-        timeout-minutes: 20
-        run: python warm_cache.py
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
+#       - name: Warm AI caches
+#         continue-on-error: true
+#         timeout-minutes: 20
+#         run: python warm_cache.py
+#         env:
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
 
-      - name: Commit refreshed data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+#       - name: Commit refreshed data
+#         run: |
+#           git config user.name "github-actions[bot]"
+#           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Track cache directories (override .gitignore)
-          git add -f data/cache/
-          git add -f _cache/ai/
+#           # Track cache directories (override .gitignore)
+#           git add -f data/cache/
+#           git add -f _cache/ai/
 
-          # Only commit if there are changes
-          if git diff --cached --quiet; then
-            echo "No data changes — skipping commit"
-          else
-            git commit -m "chore: daily data refresh $(date -u +%Y-%m-%d)
+#           # Only commit if there are changes
+#           if git diff --cached --quiet; then
+#             echo "No data changes — skipping commit"
+#           else
+#             git commit -m "chore: daily data refresh $(date -u +%Y-%m-%d)
 
-          Automated pipeline + AI cache warm via GitHub Actions."
-            git push
-          fi
+#           Automated pipeline + AI cache warm via GitHub Actions."
+#             git push
+#           fi
